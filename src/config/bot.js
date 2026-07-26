@@ -283,6 +283,34 @@ export const botConfig = {
     bypassRoles: [],
   },
 
+  // Set interval to run every 24 hours (86,400,000 milliseconds)
+const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+
+    setInterval(async () => {
+        // REPLACE THIS WITH YOUR GENERAL CHANNEL ID
+        const channelId = '1234567890123456789'; 
+        
+        try {
+            const channel = await client.channels.fetch(channelId);
+            if (!channel) return;
+
+            // Clone channel to clear history, then delete old channel
+            const position = channel.position;
+            const newChannel = await channel.clone();
+            await channel.delete();
+            await newChannel.setPosition(position);
+
+            // Send reset message
+            await newChannel.send("🔄 **Leaderboard Reset!** A new 24-hour period has started. Start chatting to climb the leaderboard!");
+        } catch (error) {
+            console.error("Failed to reset channel:", error);
+        }
+    }, TWENTY_FOUR_HOURS);
+  },
+
   // =========================
   // BIRTHDAY SETTINGS
   // =========================
