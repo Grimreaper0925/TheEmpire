@@ -48,7 +48,7 @@ function formatTimeRemaining(ms) {
     return `${hours}h ${minutes}m ${seconds}s`;
 }
 
-function buildDashboardEmbed(configs, guild) {
+async function buildDashboardEmbed(configs, guild) {
     const embed = new EmbedBuilder()
         .setTitle('🔄 Multi-Channel Chat Reset Dashboard')
         .setDescription(`Manage automated periodic chat resets for **${guild.name}**.\nConfigure multiple reset channels, 24h timers, or trigger manual resets below.`)
@@ -58,7 +58,16 @@ function buildDashboardEmbed(configs, guild) {
     if (!configs || configs.length === 0) {
         embed.addFields({ name: 'Active Resets', value: '`No channels configured yet. Use the menu below to add one.`', inline: false });
     } else {
-        configs.forEach((cfg, index) => {
+        for (let index = 0; index < configs.length; index++) {
+            const cfg = configs[index];
+            let channelName = 'unknown';
+            try {
+                const fetchedChan = await guild.channels.fetch(cfg.channelId).catch(() => null);
+                if (fetchedChan) channelName = fetchedChan.name;
+            } catch (e) {
+                // fallback
+            }
+
             const channelDisplay = `<#${cfg.channelId}>`;
             const intervalMs = cfg.intervalMs || (24 * 60 * 60 * 1000);
             const lastResetTime = new Date(cfg.lastReset || Date.now()).getTime();
@@ -67,11 +76,11 @@ function buildDashboardEmbed(configs, guild) {
             const hoursVal = Math.round(intervalMs / (3600 * 1000));
 
             embed.addFields({
-                name: `Slot #${index + 1}: #${guild.channels.cache.get(cfg.channelId)?.name || 'unknown'}`,
+                name: `Slot #${index + 1}: #${channelName}`,
                 value: `📺 Channel: ${channelDisplay}\n⏱️ Interval: ${hoursVal} Hour(s)\n⏳ Time Left: ${countdownStr}`,
                 inline: false,
             });
-        });
+        }
     }
 
     return embed;
@@ -86,7 +95,6 @@ function buildSelectMenu(guildId, configs) {
         );
 
     configs.forEach((cfg, index) => {
-        const channelName = cfg.channelId ? `Slot #${index + 1}` : `Slot #${index + 1} (Empty)`;
         menu.addOptions(
             new StringSelectMenuOptionBuilder().setLabel(`Manage Slot #${index + 1}`).setDescription(`Change timer or delete slot #${index + 1}`).setValue(`manage_${index}`).setEmoji('⚙️')
         );
@@ -98,8 +106,9 @@ function buildSelectMenu(guildId, configs) {
 async function refreshDashboard(rootInteraction, configs, guildId) {
     try {
         const selectMenu = buildSelectMenu(guildId, configs);
+        const embed = await buildDashboardEmbed(configs, rootInteraction.guild);
         await InteractionHelper.safeEditReply(rootInteraction, {
-            embeds: [buildDashboardEmbed(configs, rootInteraction.guild)],
+            embeds: [embed],
             components: [new ActionRowBuilder().addComponents(selectMenu)],
         });
     } catch (error) {
@@ -121,8 +130,10 @@ export default {
             if (!interaction.deferred) return;
 
             const selectMenu = buildSelectMenu(guildId, configs);
+            const initialEmbed = await buildDashboardEmbed(configs, interaction.guild);
+
             await InteractionHelper.safeEditReply(interaction, {
-                embeds: [buildDashboardEmbed(configs, interaction.guild)],
+                embeds: [initialEmbed],
                 components: [new ActionRowBuilder().addComponents(selectMenu)],
             });
 
@@ -199,6 +210,12 @@ async function handleManageSlot(selectInteraction, rootInteraction, configs, ind
     const cfg = configs[index];
     if (!cfg) return;
 
+    let channelName = 'unknown';
+    try {
+        const fetchedChan = await rootInteraction.guild.channels.fetch(cfg.channelId).catch(() => null);
+        if (fetchedChan) channelName = fetchedChan.name;
+    } catch (e) {}
+
     const actionRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`slot_reset_${index}`).setLabel('Reset Now').setStyle(ButtonStyle.Danger).setEmoji('⚡'),
         new ButtonBuilder().setCustomId(`slot_24h_${index}`).setLabel('Set to 24h').setStyle(ButtonStyle.Primary).setEmoji('🕒'),
@@ -208,7 +225,7 @@ async function handleManageSlot(selectInteraction, rootInteraction, configs, ind
     await sendEphemeralFollowUp(selectInteraction, {
         embeds: [
             new EmbedBuilder()
-                .setTitle(`⚙️ Managing Slot #${index + 1}`)
+                .setTitle(`⚙️ Managing Slot #${index + 1} (#${channelName})`)
                 .setDescription(`Target Channel: <#${cfg.channelId}>\nChoose an action below for this specific slot:`)
                 .setColor(getColor('info'))
         ],
@@ -226,7 +243,7 @@ async function handleManageSlot(selectInteraction, rootInteraction, configs, ind
         if (!await deferComponent(btnInteraction)) return;
 
         if (btnInteraction.customId.startsWith('slot_reset_')) {
-            const channel = rootInteraction.guild.channels.cache.get(cfg.channelId);
+            const channel = await rootInteraction.guild.channels.fetch(cfg.channelId).catch(() => null);
             if (channel) {
                 const newChannel = await channel.clone({ reason: 'Manual slot reset', position: channel.position });
                 await channel.delete('Manual slot reset');
