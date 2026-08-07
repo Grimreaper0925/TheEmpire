@@ -51,5 +51,5 @@ export default async (client) => {
         } catch (error) {
             console.error('Error in automated chat reset loop:', error);
         }
-    }, 30 * 1000); // Checks every 30 seconds
+    }, 30 * 1000); // Checks every 10 seconds
 };
