@@ -1,5 +1,6 @@
 import { getColor } from '../../../config/bot.js';
 import {
+    SlashCommandBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
@@ -113,10 +114,9 @@ async function refreshDashboard(rootInteraction, cfg, guildId) {
 }
 
 export default {
-    data: {
-        name: 'chat-reset-dashboard',
-        description: 'Open the interactive dashboard to manage automated chat resets.',
-    },
+    data: new SlashCommandBuilder()
+        .setName('chat-reset-dashboard')
+        .setDescription('Open the interactive dashboard to manage automated chat resets.'),
     prefixOnly: false,
     async execute(interaction, config, client) {
         try {
