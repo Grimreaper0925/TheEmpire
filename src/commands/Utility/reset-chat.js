@@ -13,24 +13,11 @@ export default {
 
     async execute(interaction, config, client) {
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
-        if (!deferSuccess) {
-            logger.warn(`Reset-chat interaction defer failed`, {
-                userId: interaction.user.id,
-                guildId: interaction.guildId,
-                commandName: 'reset-chat'
-            });
-            return;
-        }
+        if (!deferSuccess) return;
 
         try {
-            const guildId = interaction.guildId;
-            const settingsKey = `reset_chat_config_${guildId}`;
-            let settings = await getFromDb(settingsKey, null);
-
-            // Fallback to the current channel if no dashboard setup config exists yet
-            const channelToReset = settings?.channelId 
-                ? interaction.guild.channels.cache.get(settings.channelId) || interaction.channel 
-                : interaction.channel;
+            // Always target the exact channel the user is currently typing in
+            const channelToReset = interaction.channel;
 
             const newChannel = await channelToReset.clone({
                 reason: `Chat reset requested by ${interaction.user.tag}`,
@@ -43,13 +30,20 @@ export default {
                 content: '🔄 **Leaderboard Reset!** A new period has started. Start chatting to climb the leaderboard!'
             });
 
-            // Update database settings so the dashboard and timer loop track the new channel and restart the clock
-            if (!settings) settings = {};
-            settings.channelId = newChannel.id;
-            settings.lastReset = new Date().toISOString();
-            await setInDb(settingsKey, settings);
+            // If this channel was part of the multi-channel slots, update its ID in the database
+            const guildId = interaction.guildId;
+            const settingsKey = `reset_chat_configs_${guildId}`;
+            let configs = await getFromDb(settingsKey, []);
+            if (Array.isArray(configs)) {
+                const slot = configs.find(c => c.channelId === channelToReset.id);
+                if (slot) {
+                    slot.channelId = newChannel.id;
+                    slot.lastReset = new Date().toISOString();
+                    await setInDb(settingsKey, configs);
+                }
+            }
 
-            logger.info(`[ManualReset] Channel successfully reset via /reset-chat by ${interaction.user.tag}`);
+            logger.info(`[ManualReset] Channel #${channelToReset.name} reset via /reset-chat by ${interaction.user.tag}`);
 
         } catch (error) {
             console.error('Failed to reset channel:', error);
