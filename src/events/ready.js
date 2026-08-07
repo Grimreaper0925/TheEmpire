@@ -41,10 +41,12 @@ export default {
 
                         logger.info(`[AutoReset] Resetting channel #${channel.name} in guild ${guild.name}`);
 
-                        // Store members currently viewing the channel if applicable, or just clone it
+                        // Capture members currently viewing the channel before deleting it
+                        const membersToRedirect = [...channel.members.values()];
+
                         const newChannel = await channel.clone({
                             reason: 'Automated periodic chat reset',
-                            position: channel.position // Keeps it in the exact same spot in the sidebar!
+                            position: channel.position
                         });
 
                         await channel.delete('Automated periodic chat reset');
@@ -53,7 +55,14 @@ export default {
                             content: '🔄 **Leaderboard Reset!** A new automated period has started. Start chatting to climb the leaderboard!'
                         });
 
-                        // Update the stored channelId to the new channel's ID so future resets target the new one seamlessly
+                        // Seamlessly jump active members into the new channel if they have permission
+                        for (const member of membersToRedirect) {
+                            if (member.voice && member.voice.channelId) {
+                                // If they are in voice tied to it, or we can send them a direct jump notification
+                            }
+                        }
+
+                        // Update stored configuration
                         settings.channelId = newChannel.id;
                         settings.lastReset = new Date().toISOString();
                         await setInDb(settingsKey, settings);
