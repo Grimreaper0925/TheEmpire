@@ -1,15 +1,13 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { successEmbed } from '../../utils/embeds.js';
-import { logger } from '../../utils/logger.js';
 import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
-import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { setInDb } from '../../utils/database.js';
 
 export default {
     data: new SlashCommandBuilder()
         .setName("reset-chat-setup")
         .setDescription("Configure automated channel resets")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels) // Restricts to Admins / Manage Channels
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
         .addChannelOption(option =>
             option
                 .setName("channel")
@@ -17,48 +15,65 @@ export default {
                 .addChannelTypes(ChannelType.GuildText)
                 .setRequired(true)
         )
+        .addStringOption(option =>
+            option
+                .setName("type")
+                .setDescription("Choose time unit")
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Minutes', value: 'minutes' },
+                    { name: 'Hours', value: 'hours' }
+                )
+        )
         .addIntegerOption(option =>
             option
-                .setName("hours")
-                .setDescription("How many hours between each reset (e.g., 24)")
+                .setName("amount")
+                .setDescription("Amount of minutes or hours between resets")
                 .setRequired(true)
                 .setMinValue(1)
-                .setMaxValue(168)
+                .setMaxValue(10080) // up to a week in minutes
         ),
     category: "Utility",
 
     async execute(interaction, config, client) {
-        const deferSuccess = await InteractionHelper.safeDefer(interaction, true);
-        if (!deferSuccess) return;
+        // Acknowledge the interaction immediately to prevent timeout errors
+        await interaction.deferReply({ ephemeral: true });
 
         try {
             const guildId = interaction.guildId;
             const channel = interaction.options.getChannel('channel');
-            const hours = interaction.options.getInteger('hours');
+            const type = interaction.options.getString('type');
+            const amount = interaction.options.getInteger('amount');
+
+            // Convert everything to milliseconds for calculation
+            let intervalMs = amount * 60 * 1000; // default minutes
+            if (type === 'hours') {
+                intervalMs = amount * 60 * 60 * 1000;
+            }
 
             const settingsKey = `reset_chat_config_${guildId}`;
             const settingsData = {
                 channelId: channel.id,
-                intervalHours: hours,
+                intervalMs: intervalMs,
+                displayTime: `${amount} ${type}`,
                 lastReset: new Date().toISOString()
             };
 
             await setInDb(settingsKey, settingsData);
 
-            return await InteractionHelper.safeEditReply(interaction, {
+            return await interaction.editReply({
                 embeds: [
                     successEmbed(
                         "Chat Reset Configured",
-                        `Successfully set auto-reset for <#${channel.id}> every **${hours} hours**!`
+                        `Successfully set auto-reset for <#${channel.id}> every **${amount} ${type}**!`
                     )
                 ]
             });
 
         } catch (error) {
             console.error('Failed to configure chat reset:', error);
-            return await replyUserError(interaction, { 
-                type: ErrorTypes.UNKNOWN, 
-                message: 'There was an error saving your configuration.' 
+            return await interaction.editReply({ 
+                content: 'There was an error saving your configuration.' 
             });
         }
     },
