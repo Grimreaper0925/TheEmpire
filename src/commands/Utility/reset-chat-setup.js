@@ -9,7 +9,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName("reset-chat-setup")
         .setDescription("Configure automated channel resets")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels) // Restricts to Admins / Manage Channels
         .addChannelOption(option =>
             option
                 .setName("channel")
@@ -23,7 +23,7 @@ export default {
                 .setDescription("How many hours between each reset (e.g., 24)")
                 .setRequired(true)
                 .setMinValue(1)
-                .setMaxValue(168) // Max 1 week
+                .setMaxValue(168)
         ),
     category: "Utility",
 
