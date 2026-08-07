@@ -3,9 +3,6 @@ import {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
     ChannelSelectMenuBuilder,
     ButtonBuilder,
     ButtonStyle,
@@ -64,9 +61,7 @@ async function buildDashboardEmbed(configs, guild) {
             try {
                 const fetchedChan = await guild.channels.fetch(cfg.channelId).catch(() => null);
                 if (fetchedChan) channelName = fetchedChan.name;
-            } catch (e) {
-                // fallback
-            }
+            } catch (e) {}
 
             const channelDisplay = `<#${cfg.channelId}>`;
             const intervalMs = cfg.intervalMs || (24 * 60 * 60 * 1000);
@@ -103,10 +98,14 @@ function buildSelectMenu(guildId, configs) {
     return menu;
 }
 
-async function refreshDashboard(rootInteraction, configs, guildId) {
+async function refreshDashboard(rootInteraction, settingsKey, guildId) {
     try {
-        const selectMenu = buildSelectMenu(guildId, configs);
-        const embed = await buildDashboardEmbed(configs, rootInteraction.guild);
+        let currentConfigs = await getFromDb(settingsKey, []);
+        if (typeof currentConfigs === 'string') {
+            try { currentConfigs = JSON.parse(currentConfigs); } catch (e) { currentConfigs = []; }
+        }
+        const selectMenu = buildSelectMenu(guildId, currentConfigs);
+        const embed = await buildDashboardEmbed(currentConfigs, rootInteraction.guild);
         await InteractionHelper.safeEditReply(rootInteraction, {
             embeds: [embed],
             components: [new ActionRowBuilder().addComponents(selectMenu)],
@@ -147,10 +146,10 @@ export default {
                 const val = selectInteraction.values[0];
                 try {
                     if (val === 'add_channel') {
-                        await handleAddChannel(selectInteraction, interaction, configs, settingsKey, client);
+                        await handleAddChannel(selectInteraction, interaction, settingsKey, client);
                     } else if (val.startsWith('manage_')) {
                         const index = parseInt(val.split('_')[1], 10);
-                        await handleManageSlot(selectInteraction, interaction, configs, index, settingsKey, client);
+                        await handleManageSlot(selectInteraction, interaction, index, settingsKey, client);
                     }
                 } catch (error) {
                     logger.error('Error in multi-channel dashboard selection:', error);
@@ -163,7 +162,7 @@ export default {
     },
 };
 
-async function handleAddChannel(selectInteraction, rootInteraction, configs, settingsKey, client) {
+async function handleAddChannel(selectInteraction, rootInteraction, settingsKey, client) {
     if (!await deferComponent(selectInteraction)) return;
 
     const channelSelect = new ChannelSelectMenuBuilder()
@@ -193,20 +192,27 @@ async function handleAddChannel(selectInteraction, rootInteraction, configs, set
             return;
         }
 
+        let configs = await getFromDb(settingsKey, []);
+        if (typeof configs === 'string') { try { configs = JSON.parse(configs); } catch (e) { configs = []; } }
+
         configs.push({
             channelId: channel.id,
-            intervalMs: 24 * 60 * 60 * 1000, // Default 24 hours
+            intervalMs: 24 * 60 * 60 * 1000,
             lastReset: new Date().toISOString(),
         });
 
         await setInDb(settingsKey, configs);
         await sendEphemeralFollowUp(chanInteraction, { embeds: [successEmbed('Channel Added', `Successfully added ${channel} with a 24-hour reset cycle.`)] });
-        await refreshDashboard(rootInteraction, configs, rootInteraction.guild.id);
+        await refreshDashboard(rootInteraction, settingsKey, rootInteraction.guild.id);
     });
 }
 
-async function handleManageSlot(selectInteraction, rootInteraction, configs, index, settingsKey, client) {
+async function handleManageSlot(selectInteraction, rootInteraction, index, settingsKey, client) {
     if (!await deferComponent(selectInteraction)) return;
+    
+    let configs = await getFromDb(settingsKey, []);
+    if (typeof configs === 'string') { try { configs = JSON.parse(configs); } catch (e) { configs = []; } }
+    
     const cfg = configs[index];
     if (!cfg) return;
 
@@ -242,28 +248,32 @@ async function handleManageSlot(selectInteraction, rootInteraction, configs, ind
     btnCollector.on('collect', async btnInteraction => {
         if (!await deferComponent(btnInteraction)) return;
 
-        if (btnInteraction.customId.startsWith('slot_reset_')) {
-            const channel = await rootInteraction.guild.channels.fetch(cfg.channelId).catch(() => null);
+        let freshConfigs = await getFromDb(settingsKey, []);
+        if (typeof freshConfigs === 'string') { try { freshConfigs = JSON.parse(freshConfigs); } catch (e) { freshConfigs = []; } }
+        const targetCfg = freshConfigs[index];
+
+        if (btnInteraction.customId.startsWith('slot_reset_') && targetCfg) {
+            const channel = await rootInteraction.guild.channels.fetch(targetCfg.channelId).catch(() => null);
             if (channel) {
                 const newChannel = await channel.clone({ reason: 'Manual slot reset', position: channel.position });
                 await channel.delete('Manual slot reset');
                 await newChannel.send({ content: '🔄 **Leaderboard Reset!** A new period has started. Start chatting to climb the leaderboard!' });
-                cfg.channelId = newChannel.id;
+                targetCfg.channelId = newChannel.id;
             }
-            cfg.lastReset = new Date().toISOString();
-            await setInDb(settingsKey, configs);
+            targetCfg.lastReset = new Date().toISOString();
+            await setInDb(settingsKey, freshConfigs);
             await sendEphemeralFollowUp(btnInteraction, { embeds: [successEmbed('Reset Complete', 'Channel has been reset and timer restarted.')] });
-        } else if (btnInteraction.customId.startsWith('slot_24h_')) {
-            cfg.intervalMs = 24 * 60 * 60 * 1000;
-            cfg.lastReset = new Date().toISOString();
-            await setInDb(settingsKey, configs);
+        } else if (btnInteraction.customId.startsWith('slot_24h_') && targetCfg) {
+            targetCfg.intervalMs = 24 * 60 * 60 * 1000;
+            targetCfg.lastReset = new Date().toISOString();
+            await setInDb(settingsKey, freshConfigs);
             await sendEphemeralFollowUp(btnInteraction, { embeds: [successEmbed('Timer Updated', 'Slot interval has been set to **24 hours**.')] });
         } else if (btnInteraction.customId.startsWith('slot_delete_')) {
-            configs.splice(index, 1);
-            await setInDb(settingsKey, configs);
+            freshConfigs.splice(index, 1);
+            await setInDb(settingsKey, freshConfigs);
             await sendEphemeralFollowUp(btnInteraction, { embeds: [successEmbed('Slot Deleted', 'This reset slot has been removed.')] });
         }
 
-        await refreshDashboard(rootInteraction, configs, rootInteraction.guild.id);
+        await refreshDashboard(rootInteraction, settingsKey, rootInteraction.guild.id);
     });
 }
