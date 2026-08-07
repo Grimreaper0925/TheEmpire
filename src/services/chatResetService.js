@@ -2,7 +2,7 @@ import { getFromDb, setInDb } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
 
 export default async (client) => {
-    logger.success('Chat Reset Service successfully loaded.');
+    logger.info('Chat Reset Service successfully loaded.');
 
     setInterval(async () => {
         try {
