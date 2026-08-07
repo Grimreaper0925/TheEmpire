@@ -14,12 +14,12 @@ import {
     ComponentType,
     EmbedBuilder,
 } from 'discord.js';
-import { InteractionHelper } from '../../../../utils/interactionHelper.js';
-import { successEmbed } from '../../../../utils/embeds.js';
-import { logger } from '../../../../utils/logger.js';
-import { TitanBotError, ErrorTypes, replyUserError } from '../../../../utils/errorHandler.js';
-import { getFromDb, setInDb } from '../../../../utils/database.js';
-import { botHasPermission } from '../../../../utils/permissionGuard.js';
+import { InteractionHelper } from '../../../utils/interactionHelper.js';
+import { successEmbed } from '../../../utils/embeds.js';
+import { logger } from '../../../utils/logger.js';
+import { TitanBotError, ErrorTypes, replyUserError } from '../../../utils/errorHandler.js';
+import { getFromDb, setInDb } from '../../../utils/database.js';
+import { botHasPermission } from '../../../utils/permissionGuard.js';
 
 async function deferComponent(interaction) {
     if (interaction.deferred || interaction.replied) return true;
