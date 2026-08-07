@@ -2,6 +2,8 @@ import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
 import { handleInteractionError, TitanBotError, ErrorTypes, replyUserError } from '../../utils/errorHandler.js';
+import { setInDb } from '../../utils/database.js';
+import { successEmbed } from '../../utils/embeds.js';
 import chatResetDashboard from './modules/chat_reset_dashboard.js';
 
 export default {
@@ -13,6 +15,11 @@ export default {
             subcommand
                 .setName('dashboard')
                 .setDescription('Open the chat reset configuration dashboard'),
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('disable')
+                .setDescription('Disable and clear the automated chat reset system'),
         ),
 
     async execute(interaction, config, client) {
@@ -23,11 +30,18 @@ export default {
 
             const subcommand = interaction.options.getSubcommand();
 
-            switch (subcommand) {
-                case 'dashboard':
-                    return await chatResetDashboard.execute(interaction, config, client);
-                default:
-                    logger.warn(`Unknown /chat-reset subcommand: ${subcommand}`);
+            if (subcommand === 'dashboard') {
+                return await chatResetDashboard.execute(interaction, config, client);
+            } else if (subcommand === 'disable') {
+                await InteractionHelper.safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                const guildId = interaction.guildId;
+                const settingsKey = `reset_chat_config_${guildId}`;
+
+                await setInDb(settingsKey, { channelId: null, intervalMs: null, displayTime: '', lastReset: new Date().toISOString() });
+
+                return await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [successEmbed('🗑️ Auto-Reset Disabled', 'The automated chat reset system has been turned off and configuration cleared.')]
+                });
             }
         } catch (error) {
             if (error instanceof TitanBotError) {

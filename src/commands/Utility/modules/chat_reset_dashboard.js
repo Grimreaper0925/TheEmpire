@@ -46,7 +46,7 @@ function buildDashboardEmbed(cfg, guild) {
 
     return new EmbedBuilder()
         .setTitle('🔄 Chat Reset System Dashboard')
-        .setDescription(`Manage automated periodic chat resets for **${guild.name}**.\nUse the controls below to configure the target channel or trigger a manual reset.`)
+        .setDescription(`Manage automated periodic chat resets for **${guild.name}**.\nUse the controls below to configure the target channel, intervals, or disable the system.`)
         .setColor(getColor('info'))
         .addFields(
             { name: 'Reset Channel', value: channelDisplay, inline: true },
@@ -76,6 +76,12 @@ function buildButtonRow(cfg, guildId, disabled = false) {
                 .setLabel('Reset Now')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('⚡')
+                .setDisabled(!isActive || disabled),
+            new ButtonBuilder()
+                .setCustomId(`chat_reset_disable_${guildId}`)
+                .setLabel('Disable System')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🗑️')
                 .setDisabled(!isActive || disabled),
         ),
     ];
@@ -133,13 +139,25 @@ export default {
 
             const btnCollector = interaction.channel.createMessageComponentCollector({
                 componentType: ComponentType.Button,
-                filter: i => i.user.id === interaction.user.id && i.customId === `chat_reset_trigger_now_${guildId}`,
+                filter: i => i.user.id === interaction.user.id && (i.customId === `chat_reset_trigger_now_${guildId}` || i.customId === `chat_reset_disable_${guildId}`),
                 time: 600_000,
             });
 
             btnCollector.on('collect', async btnInteraction => {
                 try {
                     if (!await deferComponent(btnInteraction)) return;
+
+                    if (btnInteraction.customId === `chat_reset_disable_${guildId}`) {
+                        cfg = { channelId: null, intervalMs: null, displayTime: '', lastReset: new Date().toISOString() };
+                        await setInDb(settingsKey, cfg);
+
+                        await sendEphemeralFollowUp(btnInteraction, {
+                            embeds: [successEmbed('🗑️ Auto-Reset Disabled', 'The automated chat reset configuration has been completely cleared and disabled.')],
+                        });
+                        await refreshDashboard(interaction, cfg, guildId);
+                        return;
+                    }
+
                     const channel = interaction.guild.channels.cache.get(cfg.channelId);
                     if (!channel) {
                         await sendEphemeralFollowUp(btnInteraction, { content: '❌ Target reset channel could not be found.' });
@@ -160,7 +178,7 @@ export default {
                     });
                     await refreshDashboard(interaction, cfg, guildId);
                 } catch (error) {
-                    logger.error('Error triggering manual chat reset:', error);
+                    logger.error('Error handling dashboard button:', error);
                 }
             });
         } catch (error) {
