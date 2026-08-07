@@ -2,14 +2,21 @@ import { getFromDb, setInDb } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
 
 export default async (client) => {
-    logger.success('Counting Game & Chat Reset Services initialized.');
+    logger.success('Chat Reset Service successfully loaded.');
 
-    // Automated Chat Reset Background Loop
     setInterval(async () => {
         try {
             for (const [guildId, guild] of client.guilds.cache) {
-                const settingsKey = `reset_chat_config_${guildId}`;
+                let settingsKey = `reset_chat_config_${guildId}`;
                 let settings = await getFromDb(settingsKey, null);
+
+                if (!settings) {
+                    settingsKey = `guildConfig_${guildId}`;
+                    const guildData = await getFromDb(settingsKey, null);
+                    if (guildData && guildData.resetChat) {
+                        settings = guildData.resetChat;
+                    }
+                }
 
                 if (!settings) continue;
 
@@ -19,8 +26,11 @@ export default async (client) => {
 
                 if (!settings.channelId || !settings.intervalMs) continue;
 
-                const lastResetTime = new Date(settings.lastReset).getTime();
+                const lastResetTime = new Date(settings.lastReset || Date.now()).getTime();
                 const now = Date.now();
+                const timeLeft = settings.intervalMs - (now - lastResetTime);
+
+                console.log(`[AutoReset] Guild ${guild.name}: ${Math.max(0, Math.floor(timeLeft / 1000))}s remaining.`);
 
                 if (now - lastResetTime >= settings.intervalMs) {
                     const channel = guild.channels.cache.get(settings.channelId);
@@ -44,5 +54,5 @@ export default async (client) => {
         } catch (error) {
             console.error('Error in automated chat reset service:', error);
         }
-    }, 30 * 1000); // Check every 30 seconds
+    }, 30 * 1000);
 };
