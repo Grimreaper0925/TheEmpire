@@ -1,6 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { successEmbed } from '../../utils/embeds.js';
-import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
 import { setInDb } from '../../utils/database.js';
 
 export default {
@@ -15,47 +14,54 @@ export default {
                 .addChannelTypes(ChannelType.GuildText)
                 .setRequired(true)
         )
-        .addStringOption(option =>
+        .addIntegerOption(option =>
             option
-                .setName("type")
-                .setDescription("Choose time unit")
-                .setRequired(true)
-                .addChoices(
-                    { name: 'Minutes', value: 'minutes' },
-                    { name: 'Hours', value: 'hours' }
-                )
+                .setName("hours")
+                .setDescription("Set reset interval in hours (optional)")
+                .setRequired(false)
+                .setMinValue(1)
         )
         .addIntegerOption(option =>
             option
-                .setName("amount")
-                .setDescription("Amount of minutes or hours between resets")
-                .setRequired(true)
+                .setName("minutes")
+                .setDescription("Set reset interval in minutes (optional)")
+                .setRequired(false)
                 .setMinValue(1)
-                .setMaxValue(10080) // up to a week in minutes
         ),
     category: "Utility",
 
     async execute(interaction, config, client) {
-        // Acknowledge the interaction immediately to prevent timeout errors
         await interaction.deferReply({ ephemeral: true });
 
         try {
             const guildId = interaction.guildId;
             const channel = interaction.options.getChannel('channel');
-            const type = interaction.options.getString('type');
-            const amount = interaction.options.getInteger('amount');
+            const hours = interaction.options.getInteger('hours');
+            const minutes = interaction.options.getInteger('minutes');
 
-            // Convert everything to milliseconds for calculation
-            let intervalMs = amount * 60 * 1000; // default minutes
-            if (type === 'hours') {
-                intervalMs = amount * 60 * 60 * 1000;
+            if (!hours && !minutes) {
+                return await interaction.editReply({
+                    content: 'Please provide either a **hours** or **minutes** option!'
+                });
+            }
+
+            let intervalMs = 0;
+            let timeString = '';
+
+            if (hours) {
+                intervalMs += hours * 60 * 60 * 1000;
+                timeString += `${hours} hour(s) `;
+            }
+            if (minutes) {
+                intervalMs += minutes * 60 * 1000;
+                timeString += `${minutes} minute(s)`;
             }
 
             const settingsKey = `reset_chat_config_${guildId}`;
             const settingsData = {
                 channelId: channel.id,
                 intervalMs: intervalMs,
-                displayTime: `${amount} ${type}`,
+                displayTime: timeString.trim(),
                 lastReset: new Date().toISOString()
             };
 
@@ -65,7 +71,7 @@ export default {
                 embeds: [
                     successEmbed(
                         "Chat Reset Configured",
-                        `Successfully set auto-reset for <#${channel.id}> every **${amount} ${type}**!`
+                        `Successfully set auto-reset for <#${channel.id}> every **${timeString.trim()}**!`
                     )
                 ]
             });
