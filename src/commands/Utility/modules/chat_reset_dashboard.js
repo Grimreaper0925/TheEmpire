@@ -40,18 +40,29 @@ async function sendEphemeralFollowUp(interaction, payload) {
     }
 }
 
+function formatTimeRemaining(ms) {
+    if (ms <= 0) return 'Due now';
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+    return `${hours}h ${minutes}m ${seconds}s`;
+}
+
 function buildDashboardEmbed(cfg, guild) {
     const channelDisplay = cfg.channelId ? `<#${cfg.channelId}>` : '`Not set`';
-    const displayTime = cfg.displayTime || (cfg.intervalMs ? `${Math.round(cfg.intervalMs / 60000)} minute(s)` : '`Not set`');
+    const intervalMs = cfg.intervalMs || (24 * 60 * 60 * 1000);
+    const lastResetTime = new Date(cfg.lastReset || Date.now()).getTime();
+    const timeLeft = intervalMs - (Date.now() - lastResetTime);
+    const countdownStr = cfg.channelId ? formatTimeRemaining(timeLeft) : '`Disabled`';
 
     return new EmbedBuilder()
         .setTitle('🔄 Chat Reset System Dashboard')
-        .setDescription(`Manage automated periodic chat resets for **${guild.name}**.\nUse the controls below to configure the target channel, intervals, or disable the system.`)
+        .setDescription(`Manage your automated **24-hour** chat resets for **${guild.name}**.\nMonitor countdown progress, change target channels, or trigger manual overrides.`)
         .setColor(getColor('info'))
         .addFields(
             { name: 'Reset Channel', value: channelDisplay, inline: true },
             { name: 'Status', value: cfg.channelId ? 'Active' : 'Disabled', inline: true },
-            { name: 'Interval', value: displayTime, inline: true },
+            { name: 'Time Until Reset', value: countdownStr, inline: true },
         )
         .setFooter({ text: 'Dashboard closes after 10 minutes of inactivity' })
         .setTimestamp();
@@ -63,12 +74,12 @@ function buildSelectMenu(guildId) {
         .setPlaceholder('Select a setting to configure...')
         .addOptions(
             new StringSelectMenuOptionBuilder().setLabel('Target Channel').setDescription('Select the channel to automatically reset').setValue('reset_channel').setEmoji('📺'),
-            new StringSelectMenuOptionBuilder().setLabel('Reset Interval (Minutes)').setDescription('Set how often the channel resets in minutes').setValue('reset_interval_mins').setEmoji('⏱️'),
+            new StringSelectMenuOptionBuilder().setLabel('Custom Interval (Minutes)').setDescription('Override the default 24hr interval').setValue('reset_interval_mins').setEmoji('⏱️'),
         );
 }
 
 function buildButtonRow(cfg, guildId, disabled = false) {
-    const isActive = Boolean(cfg.channelId && cfg.intervalMs);
+    const isActive = Boolean(cfg.channelId);
     return [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -104,9 +115,9 @@ export default {
         try {
             const guildId = interaction.guild.id;
             const settingsKey = `reset_chat_config_${guildId}`;
-            let cfg = await getFromDb(settingsKey, { channelId: null, intervalMs: null, displayTime: '', lastReset: new Date().toISOString() });
+            let cfg = await getFromDb(settingsKey, { channelId: null, intervalMs: 24 * 60 * 60 * 1000, lastReset: new Date().toISOString() });
             if (typeof cfg === 'string') {
-                try { cfg = JSON.parse(cfg); } catch (e) { cfg = { channelId: null, intervalMs: null }; }
+                try { cfg = JSON.parse(cfg); } catch (e) { cfg = { channelId: null }; }
             }
 
             await InteractionHelper.safeDefer(interaction, { flags: MessageFlags.Ephemeral });
@@ -148,11 +159,11 @@ export default {
                     if (!await deferComponent(btnInteraction)) return;
 
                     if (btnInteraction.customId === `chat_reset_disable_${guildId}`) {
-                        cfg = { channelId: null, intervalMs: null, displayTime: '', lastReset: new Date().toISOString() };
+                        cfg = { channelId: null, intervalMs: 24 * 60 * 60 * 1000, lastReset: new Date().toISOString() };
                         await setInDb(settingsKey, cfg);
 
                         await sendEphemeralFollowUp(btnInteraction, {
-                            embeds: [successEmbed('🗑️ Auto-Reset Disabled', 'The automated chat reset configuration has been completely cleared and disabled.')],
+                            embeds: [successEmbed('🗑️ Auto-Reset Disabled', 'The automated 24-hour chat reset system has been disabled.')],
                         });
                         await refreshDashboard(interaction, cfg, guildId);
                         return;
@@ -164,17 +175,17 @@ export default {
                         return;
                     }
 
-                    const newChannel = await channel.clone({ reason: 'Manual dashboard chat reset trigger', position: channel.position });
-                    await channel.delete('Manual dashboard chat reset trigger');
+                    const newChannel = await channel.clone({ reason: 'Dashboard manual chat reset trigger', position: channel.position });
+                    await channel.delete('Dashboard manual chat reset trigger');
 
-                    await newChannel.send({ content: '🔄 **Leaderboard Reset!** A new automated period has started. Start chatting to climb the leaderboard!' });
+                    await newChannel.send({ content: '🔄 **Leaderboard Reset!** A new 24-hour period has started. Start chatting to climb the leaderboard!' });
 
                     cfg.channelId = newChannel.id;
                     cfg.lastReset = new Date().toISOString();
                     await setInDb(settingsKey, cfg);
 
                     await sendEphemeralFollowUp(btnInteraction, {
-                        embeds: [successEmbed('⚡ Channel Reset', `Successfully cleared and reset ${newChannel}.`)],
+                        embeds: [successEmbed('⚡ Channel Reset', `Successfully cleared and reset ${newChannel}. Countdown timer restarted.`)],
                     });
                     await refreshDashboard(interaction, cfg, guildId);
                 } catch (error) {
@@ -198,7 +209,7 @@ async function handleResetChannel(selectInteraction, rootInteraction, cfg, setti
         .setMaxValues(1);
 
     await sendEphemeralFollowUp(selectInteraction, {
-        embeds: [new EmbedBuilder().setTitle('📺 Target Reset Channel').setDescription(`**Current:** ${cfg.channelId ? `<#${cfg.channelId}>` : '`Not set`'}\n\nSelect the text channel you want to automatically reset.`).setColor(getColor('info'))],
+        embeds: [new EmbedBuilder().setTitle('📺 Target Reset Channel').setDescription(`**Current:** ${cfg.channelId ? `<#${cfg.channelId}>` : '`Not set`'}\n\nSelect the text channel you want to automatically reset every 24 hours.`).setColor(getColor('info'))],
         components: [new ActionRowBuilder().addComponents(channelSelect)],
     });
 
@@ -233,7 +244,7 @@ async function handleResetInterval(selectInteraction, rootInteraction, cfg, sett
         .setTitle('Configure Reset Interval')
         .addComponents(
             new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('interval_input').setLabel('Interval in Minutes').setStyle(TextInputStyle.Short).setValue(cfg.intervalMs ? String(Math.round(cfg.intervalMs / 60000)) : '60').setRequired(true),
+                new TextInputBuilder().setCustomId('interval_input').setLabel('Interval in Minutes (default 1440 for 24h)').setStyle(TextInputStyle.Short).setValue(cfg.intervalMs ? String(Math.round(cfg.intervalMs / 60000)) : '1440').setRequired(true),
             ),
         );
 
@@ -253,7 +264,6 @@ async function handleResetInterval(selectInteraction, rootInteraction, cfg, sett
     }
 
     cfg.intervalMs = minutes * 60 * 1000;
-    cfg.displayTime = `${minutes} minute(s)`;
     cfg.lastReset = new Date().toISOString();
     await setInDb(settingsKey, cfg);
 

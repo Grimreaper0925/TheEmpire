@@ -10,16 +10,8 @@ export default {
         setInterval(async () => {
             try {
                 for (const [guildId, guild] of client.guilds.cache) {
-                    let settingsKey = `reset_chat_config_${guildId}`;
+                    const settingsKey = `reset_chat_config_${guildId}`;
                     let settings = await getFromDb(settingsKey, null);
-
-                    if (!settings) {
-                        settingsKey = `guildConfig_${guildId}`;
-                        const guildData = await getFromDb(settingsKey, null);
-                        if (guildData && guildData.resetChat) {
-                            settings = guildData.resetChat;
-                        }
-                    }
 
                     if (!settings) continue;
 
@@ -27,42 +19,33 @@ export default {
                         try { settings = JSON.parse(settings); } catch (e) { continue; }
                     }
 
-                    if (!settings.channelId || !settings.intervalMs) continue;
+                    if (!settings.channelId) continue;
 
+                    // Default to 24 hours if intervalMs isn't specified
+                    const intervalMs = settings.intervalMs || (24 * 60 * 60 * 1000);
                     const lastResetTime = new Date(settings.lastReset || Date.now()).getTime();
                     const now = Date.now();
-                    const timeLeft = settings.intervalMs - (now - lastResetTime);
+                    const timeLeft = intervalMs - (now - lastResetTime);
 
                     console.log(`[AutoReset] Guild ${guild.name}: ${Math.max(0, Math.floor(timeLeft / 1000))}s remaining.`);
 
-                    if (now - lastResetTime >= settings.intervalMs) {
+                    if (now - lastResetTime >= intervalMs) {
                         const channel = guild.channels.cache.get(settings.channelId);
                         if (!channel) continue;
 
                         logger.info(`[AutoReset] Resetting channel #${channel.name} in guild ${guild.name}`);
 
-                        // Capture members currently viewing the channel before deleting it
-                        const membersToRedirect = [...channel.members.values()];
-
                         const newChannel = await channel.clone({
-                            reason: 'Automated periodic chat reset',
+                            reason: 'Automated 24-hour periodic chat reset',
                             position: channel.position
                         });
 
-                        await channel.delete('Automated periodic chat reset');
+                        await channel.delete('Automated 24-hour periodic chat reset');
 
                         await newChannel.send({
-                            content: '🔄 **Leaderboard Reset!** A new automated period has started. Start chatting to climb the leaderboard!'
+                            content: '🔄 **Leaderboard Reset!** A new 24-hour period has started. Start chatting to climb the leaderboard!'
                         });
 
-                        // Seamlessly jump active members into the new channel if they have permission
-                        for (const member of membersToRedirect) {
-                            if (member.voice && member.voice.channelId) {
-                                // If they are in voice tied to it, or we can send them a direct jump notification
-                            }
-                        }
-
-                        // Update stored configuration
                         settings.channelId = newChannel.id;
                         settings.lastReset = new Date().toISOString();
                         await setInDb(settingsKey, settings);
