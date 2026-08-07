@@ -8,7 +8,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName("reset-chat")
         .setDescription("Resets the channel by clearing all messages and starts a new period.")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels), // Restricts to Admins / Manage Channels
     category: "Utility",
 
     async execute(interaction, config, client) {
