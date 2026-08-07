@@ -1,53 +1,55 @@
-import { Events } from "discord.js";
-import { logger, startupLog } from "../utils/logger.js";
-import config from "../config/application.js";
-import { reconcileReactionRoleMessages } from "../services/reactionRoleService.js";
-import { reconcileTicketPanels, reconcileVerificationPanels, reconcileReactionRolePanelHealth } from "../services/panelHealthService.js";
-import { reconcileLevelRoles } from "../services/leveling/levelRoleSyncService.js";
-import { initRiffyAfterReady } from "../services/music/riffySetup.js";
+import { logger } from '../utils/logger.js';
+import { getFromDb, setInDb } from '../utils/database.js';
 
-export default {
-  name: Events.ClientReady,
-  once: true,
+export default async (client) => {
+    logger.success(`Logged in as ${client.user.tag}!`);
 
-  async execute(client) {
-    try {
-      client.user.setPresence(config.bot.presence);
+    // Automated Chat Reset Background Loop
+    setInterval(async () => {
+        try {
+            for (const [guildId, guild] of client.guilds.cache) {
+                const settingsKey = `reset_chat_config_${guildId}`;
+                let settings = await getFromDb(settingsKey, null);
 
-      startupLog(`Ready! Logged in as ${client.user.tag}`);
-      startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
-      startupLog(`Loaded ${client.commands.size} commands`);
+                if (!settings) continue;
 
-      if (client.config?.features?.music) {
-        initRiffyAfterReady(client);
-      }
+                // Handle stringified objects if the database returns them as strings
+                if (typeof settings === 'string') {
+                    try { settings = JSON.parse(settings); } catch (e) { continue; }
+                }
 
-      const reconciliationSummary = await reconcileReactionRoleMessages(client);
-      startupLog(
-        `Reaction role reconciliation: scanned ${reconciliationSummary.scannedMessages}, removed ${reconciliationSummary.removedMessages}, errors ${reconciliationSummary.errors}`
-      );
+                if (!settings.channelId || !settings.intervalMs) continue;
 
-      const ticketPanelSummary = await reconcileTicketPanels(client);
-      startupLog(
-        `Ticket panel health: scanned ${ticketPanelSummary.scannedGuilds} guilds, healthy ${ticketPanelSummary.healthyPanels}, deleted ${ticketPanelSummary.deletedPanels}, missing channel ${ticketPanelSummary.missingChannels}, recovered ${ticketPanelSummary.recoveredIds}, errors ${ticketPanelSummary.errors}`
-      );
+                const lastResetTime = new Date(settings.lastReset).getTime();
+                const now = Date.now();
+                const timeLeft = settings.intervalMs - (now - lastResetTime);
 
-      const verificationPanelSummary = await reconcileVerificationPanels(client);
-      startupLog(
-        `Verification panel health: scanned ${verificationPanelSummary.scannedGuilds} guilds, healthy ${verificationPanelSummary.healthyPanels}, deleted ${verificationPanelSummary.deletedPanels}, missing channel ${verificationPanelSummary.missingChannels}, recovered ${verificationPanelSummary.recoveredIds}, errors ${verificationPanelSummary.errors}`
-      );
+                console.log(`[AutoReset] Guild ${guild.name}: ${Math.max(0, Math.floor(timeLeft / 1000))}s until next reset.`);
 
-      const reactionRolePanelSummary = await reconcileReactionRolePanelHealth(client);
-      startupLog(
-        `Reaction role panel health: scanned ${reactionRolePanelSummary.scannedPanels} panels, healthy ${reactionRolePanelSummary.healthyPanels}, deleted ${reactionRolePanelSummary.deletedPanels}, missing channel ${reactionRolePanelSummary.missingChannels}, recovered ${reactionRolePanelSummary.recoveredIds}, errors ${reactionRolePanelSummary.errors}`
-      );
+                if (now - lastResetTime >= settings.intervalMs) {
+                    const channel = guild.channels.cache.get(settings.channelId);
+                    if (!channel) {
+                        console.log(`[AutoReset] Target channel not found in cache for guild ${guild.name}`);
+                        continue;
+                    }
 
-      const levelRoleSummary = await reconcileLevelRoles(client);
-      startupLog(
-        `Level role sync: scanned ${levelRoleSummary.scannedGuilds} guilds, pruned ${levelRoleSummary.prunedRewardEntries} stale rewards, re-awarded ${levelRoleSummary.rolesReAwarded} roles, errors ${levelRoleSummary.errors}`
-      );
-    } catch (error) {
-      logger.error("Error in ready event:", error);
-    }
-  },
+                    console.log(`[AutoReset] Resetting channel #${channel.name} now!`);
+
+                    const newChannel = await channel.clone({
+                        reason: 'Automated periodic chat reset'
+                    });
+                    await channel.delete('Automated periodic chat reset');
+
+                    await newChannel.send({
+                        content: '🔄 **Leaderboard Reset!** A new automated period has started. Start chatting to climb the leaderboard!'
+                    });
+
+                    settings.lastReset = new Date().toISOString();
+                    await setInDb(settingsKey, settings);
+                }
+            }
+        } catch (error) {
+            console.error('Error in automated chat reset loop:', error);
+        }
+    }, 30 * 1000); // Checks every 30 seconds
 };
