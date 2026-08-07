@@ -7,7 +7,6 @@ export default {
     async execute(client) {
         logger.info(`Logged in as ${client.user.tag}!`);
 
-        // Bulletproof Background Loop directly inside the ready event
         setInterval(async () => {
             try {
                 for (const [guildId, guild] of client.guilds.cache) {
@@ -42,15 +41,20 @@ export default {
 
                         logger.info(`[AutoReset] Resetting channel #${channel.name} in guild ${guild.name}`);
 
+                        // Store members currently viewing the channel if applicable, or just clone it
                         const newChannel = await channel.clone({
-                            reason: 'Automated periodic chat reset'
+                            reason: 'Automated periodic chat reset',
+                            position: channel.position // Keeps it in the exact same spot in the sidebar!
                         });
+
                         await channel.delete('Automated periodic chat reset');
 
                         await newChannel.send({
                             content: '🔄 **Leaderboard Reset!** A new automated period has started. Start chatting to climb the leaderboard!'
                         });
 
+                        // Update the stored channelId to the new channel's ID so future resets target the new one seamlessly
+                        settings.channelId = newChannel.id;
                         settings.lastReset = new Date().toISOString();
                         await setInDb(settingsKey, settings);
                     }
@@ -58,6 +62,6 @@ export default {
             } catch (error) {
                 console.error('Error in automated chat reset loop:', error);
             }
-        }, 30 * 1000); // Check every 30 seconds
+        }, 30 * 1000);
     }
 };
