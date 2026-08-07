@@ -10,49 +10,61 @@ export default {
         setInterval(async () => {
             try {
                 for (const [guildId, guild] of client.guilds.cache) {
-                    const settingsKey = `reset_chat_config_${guildId}`;
-                    let settings = await getFromDb(settingsKey, null);
+                    const settingsKey = `reset_chat_configs_${guildId}`;
+                    let configs = await getFromDb(settingsKey, []);
 
-                    if (!settings) continue;
-
-                    if (typeof settings === 'string') {
-                        try { settings = JSON.parse(settings); } catch (e) { continue; }
+                    if (!configs || !Array.isArray(configs) || configs.length === 0) {
+                        // Fallback support for old single-object format if present
+                        const oldKey = `reset_chat_config_${guildId}`;
+                        let oldCfg = await getFromDb(oldKey, null);
+                        if (oldCfg) {
+                            if (typeof oldCfg === 'string') { try { oldCfg = JSON.parse(oldCfg); } catch (e) { oldCfg = null; } }
+                            if (oldCfg && oldCfg.channelId) {
+                                configs = [oldCfg];
+                                await setInDb(settingsKey, configs);
+                            }
+                        }
                     }
 
-                    if (!settings.channelId) continue;
+                    if (!configs || configs.length === 0) continue;
 
-                    // Default to 24 hours if intervalMs isn't specified
-                    const intervalMs = settings.intervalMs || (24 * 60 * 60 * 1000);
-                    const lastResetTime = new Date(settings.lastReset || Date.now()).getTime();
-                    const now = Date.now();
-                    const timeLeft = intervalMs - (now - lastResetTime);
+                    let updated = false;
 
-                    console.log(`[AutoReset] Guild ${guild.name}: ${Math.max(0, Math.floor(timeLeft / 1000))}s remaining.`);
+                    for (const cfg of configs) {
+                        if (!cfg.channelId) continue;
+                        const intervalMs = cfg.intervalMs || (24 * 60 * 60 * 1000);
+                        const lastResetTime = new Date(cfg.lastReset || Date.now()).getTime();
+                        const now = Date.now();
 
-                    if (now - lastResetTime >= intervalMs) {
-                        const channel = guild.channels.cache.get(settings.channelId);
-                        if (!channel) continue;
+                        if (now - lastResetTime >= intervalMs) {
+                            const channel = guild.channels.cache.get(cfg.channelId);
+                            if (!channel) continue;
 
-                        logger.info(`[AutoReset] Resetting channel #${channel.name} in guild ${guild.name}`);
+                            logger.info(`[AutoReset] Resetting multi-channel slot #${channel.name} in guild ${guild.name}`);
 
-                        const newChannel = await channel.clone({
-                            reason: 'Automated 24-hour periodic chat reset',
-                            position: channel.position
-                        });
+                            const newChannel = await channel.clone({
+                                reason: 'Automated multi-channel periodic chat reset',
+                                position: channel.position
+                            });
 
-                        await channel.delete('Automated 24-hour periodic chat reset');
+                            await channel.delete('Automated multi-channel periodic chat reset');
 
-                        await newChannel.send({
-                            content: '🔄 **Leaderboard Reset!** A new 24-hour period has started. Start chatting to climb the leaderboard!'
-                        });
+                            await newChannel.send({
+                                content: '🔄 **Leaderboard Reset!** A new 24-hour period has started. Start chatting to climb the leaderboard!'
+                            });
 
-                        settings.channelId = newChannel.id;
-                        settings.lastReset = new Date().toISOString();
-                        await setInDb(settingsKey, settings);
+                            cfg.channelId = newChannel.id;
+                            cfg.lastReset = new Date().toISOString();
+                            updated = true;
+                        }
+                    }
+
+                    if (updated) {
+                        await setInDb(settingsKey, configs);
                     }
                 }
             } catch (error) {
-                console.error('Error in automated chat reset loop:', error);
+                console.error('Error in multi-channel automated chat reset loop:', error);
             }
         }, 30 * 1000);
     }
