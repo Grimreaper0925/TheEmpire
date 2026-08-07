@@ -5,8 +5,9 @@ module.exports = {
         .setName('reset-chat')
         .setDescription('Resets the channel by clearing all messages and starts a new period.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    
     async execute(interaction) {
-        await interaction.reply({ content: '🔄 Resetting channel...', ephemeral: true });
+        await interaction.deferReply({ ephemeral: true });
 
         try {
             const channel = interaction.channel;
@@ -23,9 +24,7 @@ module.exports = {
 
         } catch (error) {
             console.error('Failed to reset channel:', error);
-            if (interaction.deferred || interaction.replied) {
-                await interaction.followUp({ content: 'There was an error trying to reset this channel.', ephemeral: true });
-            }
+            await interaction.editReply({ content: 'There was an error trying to reset this channel.' });
         }
     },
 };
