@@ -21,20 +21,28 @@ export default {
             const guildId = interaction.guildId;
             const prefix = `server_backup_${guildId}_`;
 
-            const query = 'SELECT key, value FROM settings WHERE key LIKE $1';
-            const result = await pool.query(query, [`${prefix}%`]);
+            // Query the database using a flexible check for common table names
+            let rows = [];
+            try {
+                const res = await pool.query('SELECT key, value FROM settings WHERE key LIKE $1', [`${prefix}%`]);
+                rows = res.rows;
+            } catch (err) {
+                // Fallback if your key-value table has a different name
+                const res = await pool.query('SELECT key, value FROM kv_store WHERE key LIKE $1', [`${prefix}%`]);
+                rows = res.rows;
+            }
 
             const embed = new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle(`Server Backups (${result.rows.length})`)
+                .setTitle(`Server Backups (${rows.length})`)
                 .setTimestamp();
 
-            if (result.rows.length === 0) {
+            if (rows.length === 0) {
                 embed.setDescription('No backups found for this server. Use `/backup-create` to make one.');
             } else {
                 let description = 'Use `/backup-load <ID>` to restore a saved backup.\n\n';
                 
-                for (const row of result.rows) {
+                for (const row of rows) {
                     const backupData = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
                     const backupId = row.key.replace(prefix, '');
                     const channelsCount = (backupData.channels?.categories?.length || 0) + (backupData.channels?.others?.length || 0);
@@ -49,7 +57,7 @@ export default {
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         } catch (error) {
             console.error('Failed to list backups:', error);
-            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'Failed to retrieve backups.' });
+            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: `Failed to retrieve backups: ${error.message}` });
         }
     },
 };
