@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
-import { getFromDb } from '../../utils/database.js';
+import { pool } from '../../utils/database.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -18,11 +18,39 @@ export default {
         if (!deferSuccess) return;
 
         try {
+            const guildId = interaction.guildId;
+            const prefix = `server_backup_${guildId}_`;
+
+            let rows = [];
+            try {
+                const res = await pool.query('SELECT key, value FROM settings WHERE key LIKE $1', [`${prefix}%`]);
+                rows = res.rows;
+            } catch (err) {
+                const res = await pool.query('SELECT key, value FROM kv_store WHERE key LIKE $1', [`${prefix}%`]);
+                rows = res.rows;
+            }
+
             const embed = new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle('Server Backups')
-                .setDescription('Use `/backup-load <ID>` to restore a saved backup.')
+                .setTitle(`Server Backups (${rows.length})`)
                 .setTimestamp();
+
+            if (rows.length === 0) {
+                embed.setDescription('No backups found for this server. Use `/backup-create` to make one.');
+            } else {
+                let description = 'Use `/backup-load <ID>` to restore a saved backup.\n\n';
+                
+                for (const row of rows) {
+                    const backupData = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+                    const backupId = row.key.replace(prefix, '');
+                    const channelsCount = (backupData.channels?.categories?.length || 0) + (backupData.channels?.others?.length || 0);
+                    const rolesCount = backupData.roles?.length || 0;
+                    
+                    description += `\`#${backupId}\`\n🧩 ${channelsCount} Channels | 🛡️ ${rolesCount} Roles\n\n`;
+                }
+
+                embed.setDescription(description);
+            }
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         } catch (error) {
