@@ -7,7 +7,7 @@ import { setInDb } from '../../utils/database.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('backup-create')
-        .setDescription('Erstellt ein Backup des Servers (Kanäle & Rollen)')
+        .setDescription('Create a backup of the server (channels & roles)')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
@@ -19,7 +19,6 @@ export default {
         if (!deferSuccess) return;
 
         try {
-            // Ensure bot has Administrator permissions in the server
             if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'I need **Administrator** permission to create backups of channels and roles.' });
             }
@@ -38,13 +37,13 @@ export default {
 
             const embed = new EmbedBuilder()
                 .setColor(0x57F287)
-                .setTitle('Backup erstellt')
-                .setDescription('Dein Server-Backup wurde erfolgreich gespeichert!')
+                .setTitle('Backup Created')
+                .setDescription('Your server backup has been successfully saved!')
                 .addFields(
-                    { name: 'Backup-ID', value: `\`#${backupId}\`` },
-                    { name: 'Kanäle', value: `${(backupData.channels?.categories?.length || 0) + (backupData.channels?.others?.length || 0)}`, inline: true },
-                    { name: 'Rollen', value: `${backupData.roles?.length || 0}`, inline: true },
-                    { name: 'Läuft ab', value: 'in 6 days', inline: false }
+                    { name: 'Backup ID', value: `\`#${backupId}\`` },
+                    { name: 'Channels', value: `${(backupData.channels?.categories?.length || 0) + (backupData.channels?.others?.length || 0)}`, inline: true },
+                    { name: 'Roles', value: `${backupData.roles?.length || 0}`, inline: true },
+                    { name: 'Expires', value: 'Never (Stored in Database)', inline: false }
                 )
                 .setTimestamp();
 
