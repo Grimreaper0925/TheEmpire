@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
-import { pool } from '../../utils/database.js'; // Assumes your DB pool is exported here
+import { pool } from '../../utils/database.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -21,8 +21,6 @@ export default {
             const guildId = interaction.guildId;
             const prefix = `server_backup_${guildId}_`;
 
-            // Query your database table for keys matching this server's backups
-            // (Adjust query based on your database wrapper structure, e.g., kv store table)
             const query = 'SELECT key, value FROM settings WHERE key LIKE $1';
             const result = await pool.query(query, [`${prefix}%`]);
 
