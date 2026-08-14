@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import backup from 'discord-backup';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import { successEmbed } from '../../utils/embeds.js';
 import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
 import { setInDb } from '../../utils/database.js';
 
@@ -20,11 +19,15 @@ export default {
         if (!deferSuccess) return;
 
         try {
-            backup.setStoragePath('./backups');
+            // Ensure bot has Administrator permissions in the server
+            if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'I need **Administrator** permission to create backups of channels and roles.' });
+            }
+
             const backupData = await backup.create(interaction.guild, {
                 saveMessages: false,
                 disableEveryone: true,
-                jsonBeautify: true,
+                jsonBeautify: false,
             });
 
             const backupId = backupData.id;
@@ -39,16 +42,16 @@ export default {
                 .setDescription('Dein Server-Backup wurde erfolgreich gespeichert!')
                 .addFields(
                     { name: 'Backup-ID', value: `\`#${backupId}\`` },
-                    { name: 'Kanäle', value: `${backupData.channels.categories.length + backupData.channels.others.length}`, inline: true },
-                    { name: 'Rollen', value: `${backupData.roles.length}`, inline: true },
+                    { name: 'Kanäle', value: `${(backupData.channels?.categories?.length || 0) + (backupData.channels?.others?.length || 0)}`, inline: true },
+                    { name: 'Rollen', value: `${backupData.roles?.length || 0}`, inline: true },
                     { name: 'Läuft ab', value: 'in 6 days', inline: false }
                 )
                 .setTimestamp();
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         } catch (error) {
-            console.error('Backup creation failed:', error);
-            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'Failed to create server backup.' });
+            console.error('Backup creation detailed error:', error);
+            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: `Failed to create server backup: ${error.message || 'Unknown error'}` });
         }
     },
 };
