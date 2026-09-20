@@ -74,18 +74,6 @@ export const commandAliases = {
     't': 'ticket',
     'new': 'ticket',
 
-    'ver': 'verify',
-    'vadmin': 'verification',
-    'av': 'autoverify',
-
-    'welcome': 'welcome',
-    'greet': 'greet',
-    'goodbye': 'goodbye',
-    'autorole': 'autorole',
-
-    'calc': 'calculate',
-    'math': 'calculate',
-    'weather': 'weather',
     'todo': 'todo',
     'report': 'report',
     'userinfo': 'userinfo',

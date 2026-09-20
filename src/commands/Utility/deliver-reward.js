@@ -19,11 +19,23 @@ export default {
         const targetUser = interaction.options.getUser('user');
         const rewardContent = interaction.options.getString('reward');
         const guildId = interaction.guild.id;
-        const dbKey = `invite_reward_${guildId}_${targetUser.id}`;
+        // Same key inviteButtons.js / guildMemberAdd.js use for this user's invite progress.
+        // (Previously pointed at invite_reward_<guildId>_<userId>, a key nothing ever wrote to —
+        // this command always failed with "No invite record found" regardless of real progress.)
+        const dbKey = `invite_user_${guildId}_${targetUser.id}`;
+        const config = await getFromDb(`invite_config_${guildId}`, { goal: 10 });
 
         let userData = await getFromDb(dbKey, null);
         if (!userData) {
             return await interaction.reply({ content: 'No invite record found for this user.', ephemeral: true });
+        }
+
+        if (!userData.rewardClaimed) {
+            return await interaction.reply({ content: `❌ **${targetUser.tag}** hasn't reached their invite goal yet (\`${userData.uses || 0}/${config.goal || 10}\`) — nothing pending to deliver.`, ephemeral: true });
+        }
+
+        if (userData.rewardDelivered) {
+            return await interaction.reply({ content: `⚠️ **${targetUser.tag}**'s reward was already delivered on ${new Date(userData.rewardDeliveredAt).toLocaleString()}.`, ephemeral: true });
         }
 
         try {
@@ -32,7 +44,7 @@ export default {
                 .setColor(0x57F287)
                 .setTitle('🎁 Your Invite Reward Has Arrived!')
                 .setDescription(
-                    'Staff has verified your 10 invites and fulfilled your reward:\n\n' +
+                    `Staff has verified your ${config.goal || 10} invites and fulfilled your reward:\n\n` +
                     `\`\`\`${rewardContent}\`\`\`\n` +
                     'Thank you for supporting the server!'
                 )
@@ -40,10 +52,9 @@ export default {
 
             await targetUser.send({ embeds: [rewardEmbed] });
 
-            // Mark reward as fulfilled/claimed
-            userData.pendingReward = false;
-            userData.rewardClaimed = true;
-            userData.uses = 0; // Reset or keep tracking for next tier
+            // Mark reward as delivered so it can't be sent twice
+            userData.rewardDelivered = true;
+            userData.rewardDeliveredAt = Date.now();
             await setInDb(dbKey, userData);
 
             await interaction.reply({ content: `Successfully delivered the reward to ${targetUser.tag} via DM!`, ephemeral: true });
