@@ -1,252 +1,41 @@
-import { Events, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import { getColor, botConfig } from '../config/bot.js';
-import { getGuildConfig } from '../services/config/guildConfig.js';
-import { getWelcomeConfig, getFromDb, setInDb } from '../utils/database.js';
-import { formatWelcomeMessage } from '../utils/welcome.js';
-import { logEvent, EVENT_TYPES } from '../services/loggingService.js';
-import { getServerCounters, updateCounter } from '../services/serverstatsService.js';
-import { setBirthday as dbSetBirthday } from '../utils/database.js';
-import { logger } from '../utils/logger.js';
-
-export default {
-  name: Events.GuildMemberAdd,
-  once: false,
-  
-  async execute(member) {
-    try {
-        const { guild, user } = member;
-        
-        // ==========================================
-        // 1. INVITE TRACKING LOGIC (ADDED HERE)
-        // ==========================================
-        if (!user.bot) {
-            try {
-                const newInvites = await guild.invites.fetch().catch(() => null);
-                const oldInvites = member.client.inviteCache?.get(guild.id);
-                let usedInvite = null;
-
-                if (oldInvites && newInvites) {
-                    for (const newInvite of newInvites.values()) {
-                        const oldUses = oldInvites.get(newInvite.code) || 0;
-                        if (newInvite.uses > oldUses) {
-                            usedInvite = newInvite;
-                            break;
-                        }
-                    }
-                }
-
-                if (member.client.inviteCache && newInvites) {
-                    member.client.inviteCache.set(guild.id, new Map(newInvites.map((invite) => [invite.code, invite.uses])));
-                }
-
-                if (usedInvite && usedInvite.inviter && usedInvite.inviter.id !== user.id) {
-                    const inviter = usedInvite.inviter;
-                    const dbKey = `invite_reward_${guild.id}_${inviter.id}`;
-                    let userData = await getFromDb(dbKey, null);
-
-                    if (userData && userData.inviteCode === usedInvite.code) {
-                        userData.uses = (userData.uses || 0) + 1;
-                        await setInDb(dbKey, userData);
-
-                        if (userData.uses === 10) {
-                            try {
-                                const dmEmbed = new EmbedBuilder()
-                                    .setColor(0x57F287)
-                                    .setTitle('🎉 Invite Goal Reached!')
-                                    .setDescription(
-                                        'Congratulations! You have reached **10 successful invites**!\n\n' +
-                                        'Please open a ticket or contact staff to claim your reward:\n' +
-                                        '• **3-Day Access Key** OR **30% Off Discount**'
-                                    );
-                                await inviter.send({ embeds: [dmEmbed] });
-                            } catch (err) {
-                                // DMs closed, ignore
-                            }
-                        }
-                    }
-                }
-            } catch (inviteError) {
-                logger.debug('Error tracking invite in guildMemberAdd:', inviteError);
-            }
-        }
-        // ==========================================
-
-        const config = await getGuildConfig(member.client, guild.id);
-        
-        const welcomeConfig = await getWelcomeConfig(member.client, guild.id);
-        
-        const welcomeChannelId = welcomeConfig?.channelId;
-
-        if (welcomeConfig?.enabled && welcomeChannelId) {
-            const channel = guild.channels.cache.get(welcomeChannelId);
-            const me = guild.members.me;
-            const permissions = channel?.isTextBased?.() && me ? channel.permissionsFor(me) : null;
-            
-            if (permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) {
-                const formatData = { user, guild, member };
-                const welcomeMessage = formatWelcomeMessage(
-                    welcomeConfig.welcomeMessage || welcomeConfig.welcomeEmbed?.description || botConfig.welcome?.defaultWelcomeMessage || 'Welcome {user} to {server}!',
-                    formatData
-                );
-
-                const messageContent = welcomeConfig.welcomePing ? user.toString() : null;
-
-                const embedTitle = formatWelcomeMessage(
-                    welcomeConfig.welcomeEmbed?.title || '🎉 Welcome!',
-                    formatData
-                );
-                const embedFooter = welcomeConfig.welcomeEmbed?.footer
-                    ? formatWelcomeMessage(welcomeConfig.welcomeEmbed.footer, formatData)
-                    : `Welcome to ${guild.name}!`;
-
-                const canEmbed = permissions.has(PermissionFlagsBits.EmbedLinks);
-
-                if (!canEmbed) {
-                    await channel.send({
-                        content: messageContent || welcomeMessage
-                    });
-                } else {
-                    const embed = new EmbedBuilder()
-                        .setColor(welcomeConfig.welcomeEmbed?.color || getColor('success'))
-                        .setTitle(embedTitle)
-                        .setDescription(welcomeMessage)
-                        .setThumbnail(user.displayAvatarURL())
-                        .addFields(
-                            { name: 'User', value: `${user.tag} (${user.id})`, inline: true },
-                            { name: 'Member Count', value: guild.memberCount.toString(), inline: true }
-                        )
-                        .setTimestamp()
-                        .setFooter({ text: embedFooter });
-                    
-                    if (welcomeConfig.welcomeImage) {
-                        embed.setImage(welcomeConfig.welcomeImage);
-                    } else if (welcomeConfig.welcomeEmbed?.image?.url) {
-                        embed.setImage(welcomeConfig.welcomeEmbed.image.url);
-                    }
-                    
-                    await channel.send({ 
-                        content: messageContent,
-                        embeds: [embed] 
-                    });
-                }
-            }
-        }
-        
-        if (welcomeConfig?.roleIds && welcomeConfig.roleIds.length > 0) {
-            const delay = welcomeConfig.autoRoleDelay || 0;
-            const singleRoleId = welcomeConfig.roleIds[0];
-            
-            if (delay > 0) {
-                const timeout = setTimeout(async () => {
-                    const role = guild.roles.cache.get(singleRoleId);
-                    if (role) {
-                        await assignRoleSafely(member, role);
-                    }
-                }, delay * 1000);
-                if (typeof timeout.unref === 'function') {
-                    timeout.unref();
-                }
-            } else {
-                const role = guild.roles.cache.get(singleRoleId);
-                if (role) {
-                    await assignRoleSafely(member, role);
-                }
-            }
-        }
-        
-        if (config?.verification?.enabled || config?.verification?.autoVerify?.enabled) {
-            await handleVerification(member, guild, config.verification, member.client);
-        }
-
-        try {
-            await logEvent({
-                client: member.client,
-                guildId: guild.id,
-                eventType: EVENT_TYPES.MEMBER_JOIN,
-                data: {
-                    title: 'User joined',
-                    lines: [
-                        `**User:** ${user.toString()} (${user.displayName !== user.username ? `@${user.displayName}` : user.tag})`,
-                        `**ID:** \`${user.id}\``,
-                        `**Created:** <t:${Math.floor(user.createdTimestamp / 1000)}:R>`,
-                        `**Members:** ${guild.memberCount}`,
-                    ],
-                    quoted: false,
-                    thumbnail: user.displayAvatarURL({ dynamic: true }),
-                    userId: user.id,
-                }
-            });
-        } catch (error) {
-            logger.debug('Error logging member join:', error);
-        }
-
-        try {
-            const counters = await getServerCounters(member.client, guild.id);
-            for (const counter of counters) {
-                if (counter && counter.type && counter.channelId && counter.enabled !== false) {
-                    await updateCounter(member.client, guild, counter);
-                }
-            }
-        } catch (error) {
-            logger.debug('Error updating counters on member join:', error);
-        }
-
-        try {
-            const backupKey = `guild:${guild.id}:birthdays:left`;
-            const backup = (await member.client.db.get(backupKey)) || {};
-            if (backup[user.id]) {
-                const { month, day } = backup[user.id];
-                await dbSetBirthday(member.client, guild.id, user.id, month, day);
-                delete backup[user.id];
-                await member.client.db.set(backupKey, backup);
-                logger.debug(`Birthday restored for user ${user.id} in guild ${guild.id}`);
-            }
-        } catch (error) {
-            logger.debug('Error restoring birthday on member join:', error);
-        }
-        
-    } catch (error) {
-        logger.error('Error in guildMemberAdd event:', error);
-    }
-  }
-};
-
-async function handleVerification(member, guild, verificationConfig, client) {
-    const { autoVerifyOnJoin } = await import('../services/verificationService.js');
+// Inside your guildMemberAdd.js invite check block:
+if (userData && userData.inviteCode === usedInvite.code) {
+    userData.uses = (userData.uses || 0) + 1;
     
-    try {
-        const result = await autoVerifyOnJoin(client, guild, member, verificationConfig);
-        
-        if (result.autoVerified) {
-            logger.info('User auto-verified on join', {
-                guildId: guild.id,
-                userId: member.id,
-                userTag: member.user.tag,
-                roleName: result.roleName,
-                criteria: result.criteria
-            });
-        } else {
-            logger.debug('User not auto-verified on join', {
-                guildId: guild.id,
-                userId: member.id,
-                reason: result.reason
-            });
-        }
+    // Check if they just hit the goal (e.g., 10)
+    const targetGoal = 10;
+    if (userData.uses === targetGoal && !userData.rewardClaimed) {
+        userData.pendingReward = true;
+        userData.rewardTimestamp = Date.now();
 
-    } catch (error) {
-        logger.error('Error in auto-verification for member', {
-            guildId: guild.id,
-            userId: member.id,
-            userTag: member.user.tag,
-            error: error.message
-        });
-    }
-}
+        // 1. DM the user confirming they reached it and instructions
+        try {
+            const userDmEmbed = new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle('🎉 Invite Goal Reached!')
+                .setDescription(
+                    `Congratulations! You have reached **${targetGoal} successful invites**!\n\n` +
+                    'Your reward request has been sent to staff. Please allow up to **24 hours** for delivery via DM.'
+                );
+            await inviter.send({ embeds: [userDmEmbed] });
+        } catch (e) {}
 
-async function assignRoleSafely(member, role) {
-    try {
-        await member.roles.add(role);
-    } catch (error) {
-        logger.warn(`Failed to assign role ${role.id} to member ${member.id}:`, error);
+        // 2. Notify staff / admin via DM or designated channel
+        const staffAlertEmbed = new EmbedBuilder()
+            .setColor(0xFEE75C)
+            .setTitle('⏳ Invite Reward Pending Delivery!')
+            .setDescription(
+                `**User:** ${inviter.tag} (\`${inviter.id}\`) has reached ${targetGoal} invites!\n` +
+                `You have **24 hours** to deliver the reward using the admin command.`
+            )
+            .setTimestamp();
+
+        // Send alert to server owner or admin log channel if configured
+        try {
+            const owner = await guild.fetchOwner();
+            await owner.send({ embeds: [staffAlertEmbed] });
+        } catch (e) {}
     }
+
+    await setInDb(dbKey, userData);
 }
