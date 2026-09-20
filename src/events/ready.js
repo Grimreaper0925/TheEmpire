@@ -13,9 +13,10 @@ export default {
         client.guilds.cache.forEach(async (guild) => {
             try {
                 const firstInvites = await guild.invites.fetch();
-                client.inviteCache.set(guild.id, new Map(firstInvites.map((invite) => [invite.code, invite.uses])));
-            } catch (error) {
-                logger.error(`Could not fetch invites for guild ${guild.name}:`, error);
+                client.invites = client.invites || new Map();
+                client.invites.set(guild.id, firstInvites);
+            } catch (err) {
+                // Handle missing permissions gracefully
             }
         });
         // ---------------------------------------------

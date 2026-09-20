@@ -7,22 +7,12 @@ export default {
         const guild = member.guild;
         const guildId = guild.id;
 
-        // --- REAL HUMAN & ANTI-BOT VERIFICATION GATE ---
-        // 1. Block standard Discord bots immediately
+        // 1. Block bots immediately
         if (member.user.bot) return;
 
-        // 2. Check if the account has a verified phone number attached to Discord 
-        // (Discord flags phone-verified users in member flags or safety states if available, 
-        // or we ensure they must pass your server's Verification/AutoVerify module first).
-        // If your server uses a verification system (like auto-verify or puzzle gate), 
-        // we check if they have completed it before counting their inviter's credit.
-        
-        // Let's check if the member has a pending verification role or hasn't solved the puzzle yet:
-        const isVerified = member.pending === false; // Discord's built-in Membership Screening check
-        if (!isVerified) {
-            // Member hasn't completed membership screening or puzzle verification yet.
-            // We hold off on counting the invite until they finish verifying!
-            return;
+        // 2. Real human verification check (ensure they passed membership screening / puzzle if pending)
+        if (member.pending === true) {
+            return; // Wait until they finish verification before counting
         }
 
         const configKey = `invite_config_${guildId}`;
@@ -35,35 +25,57 @@ export default {
             dmText: 'Congratulations! Your invite goal has been verified.\n\n• **Selected Reward:** `{reward}`\n\nYour fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
         });
 
+        // 3. Fetch current invites and compare with cached invites to find the inviter
+        const cachedInvites = client.invites?.get(guildId);
         const newInvites = await guild.invites.fetch().catch(() => null);
+
         if (!newInvites) return;
 
-        // --- INVITE TRACKING & GOAL CHECK ---
-        /*
-        // When the correct inviter is matched for this verified human:
-        if (inviter && validInviteFound) {
-            const userKey = `invite_user_${guildId}_${inviter.id}`;
-            let userData = await getFromDb(userKey, { uses: 0, rewardChoice: config.rewardName });
+        // Update cache
+        client.invites = client.invites || new Map();
+        client.invites.set(guildId, newInvites);
+
+        let usedInvite = null;
+        if (cachedInvites) {
+            usedInvite = newInvites.find(inv => {
+                const cachedInv = cachedInvites.get(inv.code);
+                return cachedInv && inv.uses > cachedInv.uses;
+            });
+        }
+
+        if (usedInvite && usedInvite.inviter) {
+            const inviter = usedInvite.inviter;
             
+            // Prevent self-invites
+            if (inviter.id === member.id) return;
+
+            const userKey = `invite_user_${guildId}_${inviter.id}`;
+            let userData = await getFromDb(userKey, {
+                uses: 0,
+                rewardChoice: config.rewardName,
+                rewardClaimed: false
+            });
+
             userData.uses += 1;
             const targetGoal = config.goal || 10;
             const activeReward = userData.rewardChoice || config.rewardName;
 
-            if (userData.uses === targetGoal && !userData.rewardClaimed) {
+            // Check if user hit target goal
+            if (userData.uses >= targetGoal && !userData.rewardClaimed) {
                 userData.rewardClaimed = true;
 
-                // Send your exact custom DM layout
+                // Send Custom DM to Inviter
                 try {
-                    const formattedDesc = config.dmText.replace('{reward}', activeReward);
+                    const formattedDesc = (config.dmText || 'Congratulations! Your invite goal has been verified.\n\n• **Selected Reward:** `{reward}`').replace('{reward}', activeReward);
                     const userDmEmbed = new EmbedBuilder()
                         .setColor(config.color || 0x5865F2)
                         .setTitle('Invite Goal Achieved!')
                         .setDescription(formattedDesc);
 
-                    await inviter.send({ embeds: [userDmEmbed] });
+                    await inviter.send({ embeds: [userDmEmbed] }).catch(() => {});
                 } catch (err) {}
 
-                // Notify staff with role tags
+                // Notify Staff in Alert Channel
                 try {
                     const roleMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : `<@${guild.ownerId}>`;
                     const staffEmbed = new EmbedBuilder()
@@ -74,7 +86,7 @@ export default {
                             `• **Member:** ${inviter} (\`${inviter.id}\`)\n` +
                             `• **Target Goal:** \`${targetGoal} Invites\`\n` +
                             `• **Chosen Reward:** \`${activeReward}\`\n\n` +
-                            '> *Use `/deliver-reward [user] [key]` to fulfill.*'
+                            '> *Use `/deliver-reward` to fulfill.*'
                         );
 
                     if (config.alertChannelId) {
@@ -83,8 +95,8 @@ export default {
                     }
                 } catch (err) {}
             }
+
             await setInDb(userKey, userData);
         }
-        */
     }
 };
