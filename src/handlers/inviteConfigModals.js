@@ -1,9 +1,9 @@
 import { EmbedBuilder } from 'discord.js';
-import { getFromDb, setInDb } from '../utils/database.js';
+import { getFromDb, setInDb } from '../../utils/database.js';
 
-export const inviteConfigModalHandler = {
-    name: 'invcfg_modal_',
-    async execute(interaction, client) {
+export default {
+    name: 'invcfg_modal',
+    async execute(interaction, client, args) {
         if (!interaction.memberPermissions?.has('Administrator')) return;
 
         await interaction.deferUpdate();
@@ -11,11 +11,15 @@ export const inviteConfigModalHandler = {
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
         let config = await getFromDb(configKey, {
-            goal: 10, color: '#5865F2', rewardName: '3-Day Access Key', alertChannelId: '', staffRoleId: '',
+            goal: 10, 
+            color: '#5865F2', 
+            rewardName: '3-Day Access Key', 
+            alertChannelId: '', 
+            staffRoleId: '',
             dmText: '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`\n\nPlease wait up to 24 hours for staff to send your access key!'
         });
 
-        const action = interaction.customId.replace('invcfg_modal_', '');
+        const action = args[0]; // Matches invcfg_modal:goal, invcfg_modal:reward, etc.
         const val = interaction.fields.getTextInputValue('input_value');
 
         if (action === 'goal') config.goal = parseInt(val, 10) || 10;
@@ -44,5 +48,3 @@ export const inviteConfigModalHandler = {
         await interaction.editReply({ embeds: [embed] });
     }
 };
-
-export default inviteConfigModalHandler;

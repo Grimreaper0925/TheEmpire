@@ -11,11 +11,15 @@ export default {
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
         let config = await getFromDb(configKey, {
-            goal: 10, color: '#5865F2', rewardName: '3-Day Access Key', alertChannelId: '', staffRoleId: '',
+            goal: 10, 
+            color: '#5865F2', 
+            rewardName: '3-Day Access Key', 
+            alertChannelId: '', 
+            staffRoleId: '',
             dmText: '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`\n\nPlease wait up to 24 hours for staff to send your access key!'
         });
 
-        const action = args[0]; // Gets the button action from customId (e.g., invcfg_btn:goal)
+        const action = args[0];
 
         if (action === 'goal') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_goal').setTitle('Set Invite Goal');
@@ -25,7 +29,7 @@ export default {
         }
         if (action === 'reward') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_reward').setTitle('Set Reward Description');
-            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Reward description text').setStyle(TextInputStyle.Short).setValue(config.rewardName).setRequired(true);
+            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Reward description text').setStyle(TextInputStyle.Short).setValue(config.rewardName || '3-Day Access Key').setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
@@ -55,7 +59,7 @@ export default {
         }
         if (action === 'test') {
             try {
-                const parsedDmText = (config.dmText).replace('{reward}', config.rewardName);
+                const parsedDmText = (config.dmText || 'Reward: {reward}').replace('{reward}', config.rewardName);
                 const userDmEmbed = new EmbedBuilder().setColor(config.color || '#5865F2').setTitle('✅ __Test Delivery__').setDescription(parsedDmText + '\n\n**Test Key:** `TEST-KEY-123`').setTimestamp();
                 await interaction.user.send({ embeds: [userDmEmbed] });
 
