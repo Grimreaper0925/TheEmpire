@@ -283,8 +283,13 @@ export default {
                 } else if (interaction.isButton()) {
                     if (interaction.customId.startsWith('invite_')) {
                         try {
-                            const { handleInviteButton } = await import('../handlers/inviteButtons.js');
-                            await handleInviteButton(interaction);
+                            const inviteModule = await import('../handlers/inviteButtons.js');
+                            const handlerFn = inviteModule.handleInviteButton || inviteModule.default?.execute;
+                            if (handlerFn) {
+                                await handlerFn(interaction);
+                            } else {
+                                throw new Error('Invite button handler function not found.');
+                            }
                         } catch (error) {
                             await handleInteractionError(interaction, error, withTraceContext({
                                 type: 'button',
@@ -348,7 +353,6 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isStringSelectMenu()) {
-                    // --- INVITE SELECT MENU ROUTERS ---
                     if (interaction.customId === 'invite_config_select') {
                         try {
                             const { inviteConfigSelectHandler } = await import('../handlers/inviteConfigSelect.js');
@@ -376,7 +380,6 @@ export default {
                         }
                         return;
                     }
-                    // ---------------------------------
 
                     const [customId, ...args] = interaction.customId.split(':');
                     const selectMenu = client.selectMenus.get(customId);
