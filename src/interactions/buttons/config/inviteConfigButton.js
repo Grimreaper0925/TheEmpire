@@ -1,5 +1,5 @@
 import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getFromDb, setInDb } from '../utils/database.js';
+import { getFromDb, setInDb } from '../../../utils/database.js';
 
 export async function handleInviteButton(interaction) {
     const guildId = interaction.guild.id;
