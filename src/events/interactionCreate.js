@@ -348,6 +348,7 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isStringSelectMenu()) {
+                    // --- INVITE SELECT MENU ROUTERS ---
                     if (interaction.customId === 'invite_config_select') {
                         try {
                             const { inviteConfigSelectHandler } = await import('../handlers/inviteConfigSelect.js');
@@ -361,6 +362,21 @@ export default {
                         }
                         return;
                     }
+
+                    if (interaction.customId === 'invite_choose_reward') {
+                        try {
+                            const { inviteRewardChoiceHandler } = await import('../handlers/inviteRewardChoice.js');
+                            await inviteRewardChoiceHandler.execute(interaction, client);
+                        } catch (error) {
+                            await handleInteractionError(interaction, error, withTraceContext({
+                                type: 'select_menu',
+                                customId: interaction.customId,
+                                handler: 'invite_reward_choice'
+                            }, interactionTraceContext));
+                        }
+                        return;
+                    }
+                    // ---------------------------------
 
                     const [customId, ...args] = interaction.customId.split(':');
                     const selectMenu = client.selectMenus.get(customId);
