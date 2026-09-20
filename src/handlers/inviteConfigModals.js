@@ -3,7 +3,7 @@ import { getFromDb, setInDb } from '../../utils/database.js';
 
 export default {
     name: 'invcfg_modal',
-    async execute(interaction, client, args) {
+    async execute(interaction, client) {
         if (!interaction.memberPermissions?.has('Administrator')) return;
 
         await interaction.deferUpdate();
@@ -11,15 +11,11 @@ export default {
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
         let config = await getFromDb(configKey, {
-            goal: 10, 
-            color: '#5865F2', 
-            rewardName: '3-Day Access Key', 
-            alertChannelId: '', 
-            staffRoleId: '',
+            goal: 10, color: '#5865F2', rewardName: '3-Day Access Key', alertChannelId: '', staffRoleId: '',
             dmText: '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`\n\nPlease wait up to 24 hours for staff to send your access key!'
         });
 
-        const action = args[0]; // Matches invcfg_modal:goal, invcfg_modal:reward, etc.
+        const action = interaction.customId.replace('invcfg_modal_', '');
         const val = interaction.fields.getTextInputValue('input_value');
 
         if (action === 'goal') config.goal = parseInt(val, 10) || 10;

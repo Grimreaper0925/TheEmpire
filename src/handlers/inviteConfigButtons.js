@@ -1,19 +1,29 @@
 import { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getFromDb, setInDb } from '../utils/database.js';
+import { getFromDb, setInDb } from '../../../utils/database.js';
 
-export const inviteConfigButtonHandler = {
-    name: 'invcfg_btn_',
-    async execute(interaction, client) {
-        if (!interaction.memberPermissions?.has('Administrator')) return;
+export default {
+    name: 'invcfg_btn',
+    async execute(interaction, client, args) {
+        if (!interaction.memberPermissions?.has('Administrator')) {
+            return await interaction.reply({ content: '❌ **Access Denied.**', ephemeral: true });
+        }
 
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
         let config = await getFromDb(configKey, {
-            goal: 10, color: '#5865F2', rewardName: '3-Day Access Key', alertChannelId: '', staffRoleId: '',
+            goal: 10, 
+            color: '#5865F2', 
+            rewardName: '3-Day Access Key', 
+            alertChannelId: '', 
+            staffRoleId: '',
             dmText: '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`\n\nPlease wait up to 24 hours for staff to send your access key!'
         });
 
-        const action = interaction.customId.replace('invcfg_btn_', '');
+        // Safeguards to prevent undefined text
+        if (!config.rewardName) config.rewardName = '3-Day Access Key';
+        if (!config.dmText) config.dmText = '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`';
+
+        const action = args[0];
 
         if (action === 'goal') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_goal').setTitle('Set Invite Goal');
@@ -23,7 +33,6 @@ export const inviteConfigButtonHandler = {
         }
         if (action === 'reward') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_reward').setTitle('Set Reward Description');
-            // Changed to Short style so it never crashes Discord's modal parser
             const input = new TextInputBuilder().setCustomId('input_value').setLabel('Reward description text').setStyle(TextInputStyle.Short).setValue(config.rewardName).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
@@ -36,7 +45,6 @@ export const inviteConfigButtonHandler = {
         }
         if (action === 'dmtext') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_dmtext').setTitle('Set Custom DM Message');
-            // Changed to Short style to prevent paragraph parsing bugs on mobile/desktop clients
             const input = new TextInputBuilder().setCustomId('input_value').setLabel('Message (use {reward} for name)').setStyle(TextInputStyle.Short).setValue(config.dmText).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
@@ -55,7 +63,7 @@ export const inviteConfigButtonHandler = {
         }
         if (action === 'test') {
             try {
-                const parsedDmText = (config.dmText).replace('{reward}', config.rewardName);
+                const parsedDmText = (config.dmText || 'Here is your reward: {reward}').replace('{reward}', config.rewardName);
                 const userDmEmbed = new EmbedBuilder().setColor(config.color || '#5865F2').setTitle('✅ __Test Delivery__').setDescription(parsedDmText + '\n\n**Test Key:** `TEST-KEY-123`').setTimestamp();
                 await interaction.user.send({ embeds: [userDmEmbed] });
 
