@@ -281,7 +281,6 @@ export default {
                         }
                     }
                 } else if (interaction.isButton()) {
-                    // --- INVITE BUTTON ROUTER ---
                     if (interaction.customId.startsWith('invite_')) {
                         try {
                             const { handleInviteButton } = await import('../handlers/inviteButtons.js');
@@ -295,7 +294,6 @@ export default {
                         }
                         return;
                     }
-                    // ----------------------------
 
                     if (interaction.customId.startsWith('shared_todo_')) {
                         const parts = interaction.customId.split('_');
@@ -350,6 +348,22 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isStringSelectMenu()) {
+                    // --- INVITE CONFIG SELECT MENU ROUTE ---
+                    if (interaction.customId === 'invite_config_select') {
+                        try {
+                            const { inviteConfigSelectHandler } = await import('../handlers/inviteConfigSelect.js');
+                            await inviteConfigSelectHandler.execute(interaction, client);
+                        } catch (error) {
+                            await handleInteractionError(interaction, error, withTraceContext({
+                                type: 'select_menu',
+                                customId: interaction.customId,
+                                handler: 'invite_config'
+                            }, interactionTraceContext));
+                        }
+                        return;
+                    }
+                    // -------------------------------------
+
                     const [customId, ...args] = interaction.customId.split(':');
                     const selectMenu = client.selectMenus.get(customId);
 
