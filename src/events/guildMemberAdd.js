@@ -61,7 +61,7 @@ async function trackInviteJoin(member, client) {
 
     if (!usedInvite) {
         const snapshot = newInvites.map(inv => `${inv.code}:${inv.uses}(cached:${cachedInvites?.get(inv.code)?.uses ?? 'none'})`).join(', ');
-        logger.debug(`[Invite] Could not identify which invite ${member.user.tag} used to join guild ${guildId}. Cached invites: ${cachedInvites?.size ?? 0}, live invites: ${newInvites.size}. Snapshot: [${snapshot}]`);
+        logger.warn(`[Invite] Could not identify which invite ${member.user.tag} used to join guild ${guildId}. Cached invites: ${cachedInvites?.size ?? 0}, live invites: ${newInvites.size}. Snapshot: [${snapshot}]`);
         return;
     }
 
