@@ -22,17 +22,42 @@ export const inviteConfigSelectHandler = {
             config.alertChannelId = interaction.channelId;
         } else if (selectedValue === 'toggle_color') {
             config.color = config.color === '#5865F2' ? '#57F287' : '#5865F2';
+        } else if (selectedValue === 'test_reward_delivery') {
+            // Test sending a simulated reward DM to the administrator running the test
+            try {
+                const testEmbed = new EmbedBuilder()
+                    .setColor(0x57F287)
+                    .setTitle('🧪 __Test Reward Delivery__')
+                    .setDescription(
+                        '> This is a simulation test for your invite reward system.\n\n' +
+                        'Here is your test access key:\n' +
+                        '```css\nTEST-KEY-EMPIRE-2026-9999\n```\n' +
+                        'Everything is wired up and working smoothly!'
+                    )
+                    .setTimestamp();
+
+                await interaction.user.send({ embeds: [testEmbed] });
+                return await interaction.reply({ 
+                    content: '✅ **Test Successful!** A simulated reward message has been sent directly to your DMs.', 
+                    ephemeral: true 
+                });
+            } catch (err) {
+                return await interaction.reply({ 
+                    content: '❌ **Test Failed:** Could not send you a DM. Make sure your direct messages are open!', 
+                    ephemeral: true 
+                });
+            }
         }
 
         await setInDb(configKey, config);
 
         const updatedEmbed = new EmbedBuilder()
             .setColor(config.color)
-            .setTitle('⚙️ __Invite Rewards Dashboard__')
+            .setTitle('⚙️ __Invite Rewards Control Panel__')
             .setDescription(
                 '> Settings updated successfully! ✨\n\n' +
                 '• **Target Goal:** `✨ ' + config.goal + ' successful invites`\n' +
-                '• **Embed Color:** `' + config.color + '`\n' +
+                '• **Embed Theme Color:** `' + config.color + '`\n' +
                 '• **Staff Channel:** ' + (config.alertChannelId ? `<#${config.alertChannelId}>` : '`Not Set`')
             )
             .setTimestamp();

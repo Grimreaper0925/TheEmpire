@@ -4,7 +4,7 @@ import { getFromDb } from '../../utils/database.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('invite-config')
-        .setDescription('Configure invite reward goals, embed colors, and notification settings')
+        .setDescription('Configure invite reward goals, embed colors, and test reward delivery')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
@@ -35,12 +35,13 @@ export default {
         const selectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('invite_config_select')
-                .setPlaceholder('🛠️ Select a configuration action...')
+                .setPlaceholder('🛠️ Select a configuration or test action...')
                 .addOptions([
                     { label: 'Set Goal to 10 Invites', description: 'Requires users to secure 10 invites', value: 'set_goal_10', emoji: '🎯' },
                     { label: 'Set Goal to 5 Invites', description: 'Requires users to secure 5 invites', value: 'set_goal_5', emoji: '🎯' },
                     { label: 'Set Alert Channel to Current Channel', description: 'Routes staff fulfillment alerts here', value: 'set_alert_channel', emoji: '📢' },
-                    { label: 'Toggle Theme Color (Purple/Green)', description: 'Switch dashboard aesthetic style', value: 'toggle_color', emoji: '🎨' }
+                    { label: 'Toggle Theme Color (Purple/Green)', description: 'Switch dashboard aesthetic style', value: 'toggle_color', emoji: '🎨' },
+                    { label: '🧪 Test Reward Delivery (DM Me)', description: 'Sends a simulated test reward key to your DMs', value: 'test_reward_delivery', emoji: '🎁' }
                 ])
         );
 
