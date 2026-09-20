@@ -14,90 +14,91 @@ export const inviteConfigSelectHandler = {
             goal: 10, 
             color: '#5865F2', 
             rewardName: '3-Day Access Key & 30% Off Discount',
-            alertChannelId: '' 
+            alertChannelId: '',
+            staffRoleId: ''
         });
 
         const selectedValue = interaction.values[0];
 
-        // 1. Handle Custom Goal Modal Trigger
         if (selectedValue === 'custom_goal_modal') {
-            const modal = new ModalBuilder()
-                .setCustomId('invite_modal_goal')
-                .setTitle('Set Invite Goal');
-
-            const goalInput = new TextInputBuilder()
-                .setCustomId('goal_input')
-                .setLabel('Required Invites (Number only)')
-                .setStyle(TextInputStyle.Short)
-                .setValue(String(config.goal))
-                .setRequired(true);
-
+            const modal = new ModalBuilder().setCustomId('invite_modal_goal').setTitle('Set Invite Goal');
+            const goalInput = new TextInputBuilder().setCustomId('goal_input').setLabel('Required Invites (Number)').setStyle(TextInputStyle.Short).setValue(String(config.goal)).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(goalInput));
             return await interaction.showModal(modal);
         }
 
-        // 2. Handle Custom Reward Description Modal Trigger
         if (selectedValue === 'custom_reward_modal') {
-            const modal = new ModalBuilder()
-                .setCustomId('invite_modal_reward')
-                .setTitle('Set Reward Description');
-
-            const rewardInput = new TextInputBuilder()
-                .setCustomId('reward_input')
-                .setLabel('Reward description shown on panel')
-                .setStyle(TextInputStyle.Paragraph)
-                .setValue(config.rewardName)
-                .setRequired(true);
-
+            const modal = new ModalBuilder().setCustomId('invite_modal_reward').setTitle('Set Reward Description');
+            const rewardInput = new TextInputBuilder().setCustomId('reward_input').setLabel('Reward description').setStyle(TextInputStyle.Paragraph).setValue(config.rewardName).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(rewardInput));
+            return await interaction.showModal(modal);
+        }
+
+        if (selectedValue === 'custom_role_modal') {
+            const modal = new ModalBuilder().setCustomId('invite_modal_role').setTitle('Set Staff Role ID');
+            const roleInput = new TextInputBuilder().setCustomId('role_input').setLabel('Staff Role ID to Tag').setStyle(TextInputStyle.Short).setValue(config.staffRoleId || '').setRequired(true);
+            modal.addComponents(new ActionRowBuilder().addComponents(roleInput));
             return await interaction.showModal(modal);
         }
 
         if (selectedValue === 'set_alert_channel') {
             config.alertChannelId = interaction.channelId;
-        } else if (selectedValue === 'toggle_color') {
-            config.color = config.color === '#5865F2' ? '#57F287' : '#5865F2';
-        } else if (selectedValue === 'test_reward_delivery') {
+            await setInDb(configKey, config);
+            return await interaction.reply({ content: `✅ Staff alert channel successfully set to <#${config.alertChannelId}>!`, ephemeral: true });
+        }
+
+        // --- TEST FULL WORKFLOW SIMULATION ---
+        if (selectedValue === 'test_full_workflow') {
             try {
-                const testEmbed = new EmbedBuilder()
-                    .setColor(0x57F287)
-                    .setTitle('🧪 __Test Reward Delivery Simulation__')
+                // 1. Modern Clean DM to the User (You)
+                const userDmEmbed = new EmbedBuilder()
+                    .setColor(config.color || 0x5865F2)
+                    .setTitle('🎉 __Invite Goal Achieved!__')
                     .setDescription(
-                        '> This is a test simulation for your invite reward system.\n\n' +
-                        `• **Reward Package:** \`${config.rewardName}\`\n` +
-                        '• **Test Key:**\n```css\nEMPIRE-TEST-KEY-2026-SUCCESS\n```\n' +
-                        'Your reward delivery pipeline is fully functional!'
+                        '> **Congratulations!** You have successfully unlocked your reward tier.\n\n' +
+                        `• **Unlocked Reward:** \`${config.rewardName}\`\n\n' +
+                        'Your fulfillment request has been transmitted to server administration. Please allow up to **24 hours** for verification and secure delivery right here via DM.'
+                    )
+                    .setFooter({ text: 'The Empire • Automated Verification' })
+                    .setTimestamp();
+
+                await interaction.user.send({ embeds: [userDmEmbed] });
+
+                // 2. Modern Clean Staff Notification (Tagged Role or Channel)
+                const roleMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : `<@${interaction.user.id}>`;
+                const staffEmbed = new EmbedBuilder()
+                    .setColor(0xFEE75C)
+                    .setTitle('⏳ __Pending Reward Fulfillment Required__')
+                    .setDescription(
+                        `> A member has completed the requirements and is waiting for fulfillment!\n\n` +
+                        `• **User:** ${interaction.user} (\`${interaction.user.id}\`)\n` +
+                        `• **Goal Reached:** \`${config.goal} Invites\`\n` +
+                        `• **Target Reward:** \`${config.rewardName}\`\n\n` +
+                        '> *Use `/deliver-reward [user] [key]` to fulfill this delivery within 24 hours.*'
                     )
                     .setTimestamp();
 
-                await interaction.user.send({ embeds: [testEmbed] });
+                if (config.alertChannelId) {
+                    const channel = interaction.guild.channels.cache.get(config.alertChannelId);
+                    if (channel) {
+                        await channel.send({ content: `🔔 Attention ${roleMention}:`, embeds: [staffEmbed] });
+                    }
+                } else {
+                    // Fallback to sending staff alert to admin's DM if no channel is set
+                    await interaction.user.send({ content: `🔔 **Staff Alert (Simulation):**`, embeds: [staffEmbed] });
+                }
+
                 return await interaction.reply({ 
-                    content: '✅ **Test Successful!** A simulated reward delivery has been sent to your DMs.', 
+                    content: '🚀 **Full Simulation Sent!** Check your DMs for the user confirmation message and staff alert.', 
                     ephemeral: true 
                 });
             } catch (err) {
                 return await interaction.reply({ 
-                    content: '❌ **Test Failed:** Could not send you a DM. Make sure your direct messages are open!', 
+                    content: '❌ **Simulation Failed:** Make sure your DMs are open so the bot can message you.', 
                     ephemeral: true 
                 });
             }
         }
-
-        await setInDb(configKey, config);
-
-        const updatedEmbed = new EmbedBuilder()
-            .setColor(config.color)
-            .setTitle('⚙️ __Invite Rewards Control Panel__')
-            .setDescription(
-                '> Settings updated successfully! ✨\n\n' +
-                '• **Target Goal:** `✨ ' + config.goal + ' successful invites`\n' +
-                '• **Configured Reward:** `' + config.rewardName + '`\n' +
-                '• **Embed Theme Color:** `' + config.color + '`\n' +
-                '• **Staff Channel:** ' + (config.alertChannelId ? `<#${config.alertChannelId}>` : '`Not Set`')
-            )
-            .setTimestamp();
-
-        await interaction.update({ embeds: [updatedEmbed] });
     }
 };
 

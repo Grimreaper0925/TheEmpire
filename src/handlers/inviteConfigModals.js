@@ -14,29 +14,32 @@ export const inviteConfigModalHandler = {
             goal: 10, 
             color: '#5865F2', 
             rewardName: '3-Day Access Key & 30% Off Discount',
-            alertChannelId: '' 
+            alertChannelId: '',
+            staffRoleId: ''
         });
 
         if (interaction.customId === 'invite_modal_goal') {
             const newGoal = parseInt(interaction.fields.getTextInputValue('goal_input'), 10);
             if (isNaN(newGoal) || newGoal <= 0) {
-                return await interaction.reply({ content: '❌ Please enter a valid number for the invite goal.', ephemeral: true });
+                return await interaction.reply({ content: '❌ Please enter a valid number.', ephemeral: true });
             }
             config.goal = newGoal;
         } else if (interaction.customId === 'invite_modal_reward') {
-            const newReward = interaction.fields.getTextInputValue('reward_input');
-            config.rewardName = newReward;
+            config.rewardName = interaction.fields.getTextInputValue('reward_input');
+        } else if (interaction.customId === 'invite_modal_role') {
+            config.staffRoleId = interaction.fields.getTextInputValue('role_input').trim();
         }
 
         await setInDb(configKey, config);
 
         const successEmbed = new EmbedBuilder()
             .setColor(config.color)
-            .setTitle('✅ __Configuration Updated__')
+            .setTitle('✅ __Configuration Updated Successfully__')
             .setDescription(
-                `Successfully saved changes!\n\n` +
-                `• **New Goal:** \`${config.goal} invites\`\n` +
-                `• **New Reward:** \`${config.rewardName}\``
+                `Your invite reward settings have been updated:\n\n` +
+                `• **Invite Goal:** \`${config.goal}\`\n` +
+                `• **Reward Description:** \`${config.rewardName}\`\n` +
+                `• **Staff Role ID:** \`${config.staffRoleId || 'None'}\``
             )
             .setTimestamp();
 

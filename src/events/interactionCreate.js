@@ -387,7 +387,6 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isModalSubmit()) {
-                    // --- INVITE CONFIG MODAL ROUTE ---
                     if (interaction.customId.startsWith('invite_modal_')) {
                         try {
                             const { inviteConfigModalHandler } = await import('../handlers/inviteConfigModals.js');
@@ -401,7 +400,6 @@ export default {
                         }
                         return;
                     }
-                    // ---------------------------------
 
                     if (
                         interaction.customId.startsWith('app_review_')
