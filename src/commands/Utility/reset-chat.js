@@ -27,7 +27,7 @@ export default {
             await channelToReset.delete(`Chat reset requested by ${interaction.user.tag}`);
 
             await newChannel.send({
-                content: '🔄 **Leaderboard Reset!** A new period has started. Start chatting to climb the leaderboard!'
+                content: '🔄 **Chat Channel Reset!** A new period has started. Start chatting!'
             });
 
             // If this channel was part of the multi-channel slots, update its ID in the database
