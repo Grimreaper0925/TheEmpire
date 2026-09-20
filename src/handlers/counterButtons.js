@@ -1,6 +1,6 @@
 import { MessageFlags } from 'discord.js';
 import { createEmbed, successEmbed } from '../utils/embeds.js';
-import { performDeletionByCounterId } from '../commands/ServerStats/modules/serverstats_delete.js';
+import { performDeletionByCounterId } from '../commands/ServerStats/serverstats-delete.js'; // Adjust this path if your file is named differently
 import { logger } from '../utils/logger.js';
 import { ErrorTypes, replyUserError, handleInteractionError } from '../utils/errorHandler.js';
 

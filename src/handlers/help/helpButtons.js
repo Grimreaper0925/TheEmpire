@@ -1,6 +1,6 @@
 import { createEmbed } from '../../utils/embeds.js';
 import { createAllCommandsMenu } from './helpSelectMenus.js';
-import { createInitialHelpMenu } from '../../commands/Core/help.js';
+import { createInitialHelpMenu } from '../../commands/utility/help.js'; // Update to match your actual help command directory
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 
