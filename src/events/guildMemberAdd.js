@@ -59,14 +59,21 @@ async function trackInviteJoin(member, client) {
         return inv.uses > 0;
     }) || null;
 
-    if (!usedInvite) return;
+    if (!usedInvite) {
+        const snapshot = newInvites.map(inv => `${inv.code}:${inv.uses}(cached:${cachedInvites?.get(inv.code)?.uses ?? 'none'})`).join(', ');
+        logger.debug(`[Invite] Could not identify which invite ${member.user.tag} used to join guild ${guildId}. Cached invites: ${cachedInvites?.size ?? 0}, live invites: ${newInvites.size}. Snapshot: [${snapshot}]`);
+        return;
+    }
 
     // IMPORTANT: never trust usedInvite.inviter here — bot-created invites
     // always attribute to the bot itself, not the user the link was made for.
     // Look up the real owner from our own database instead.
     const ownerId = await getFromDb(`invite_owner_${guildId}_${usedInvite.code}`, null);
 
-    if (!ownerId) return;           // Not one of our tracked personal links
+    if (!ownerId) {
+        logger.warn(`[Invite] ${member.user.tag} joined guild ${guildId} via invite ${usedInvite.code} (uses now ${usedInvite.uses}), but no invite_owner_${guildId}_${usedInvite.code} record exists — not tracked as a personal link.`);
+        return;
+    }
     if (ownerId === member.id) return; // Prevent self-invites
 
     const userKey = `invite_user_${guildId}_${ownerId}`;
