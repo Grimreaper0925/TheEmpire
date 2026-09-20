@@ -7,6 +7,19 @@ export default {
     async execute(client) {
         logger.info(`Logged in as ${client.user.tag}!`);
 
+        // --- ADD THIS INVITE CACHE INITIALIZATION ---
+        client.inviteCache = new Map();
+        
+        client.guilds.cache.forEach(async (guild) => {
+            try {
+                const firstInvites = await guild.invites.fetch();
+                client.inviteCache.set(guild.id, new Map(firstInvites.map((invite) => [invite.code, invite.uses])));
+            } catch (error) {
+                logger.error(`Could not fetch invites for guild ${guild.name}:`, error);
+            }
+        });
+        // ---------------------------------------------
+
         setInterval(async () => {
             try {
                 for (const [guildId, guild] of client.guilds.cache) {

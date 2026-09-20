@@ -1,7 +1,7 @@
 import { Events, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { getColor, botConfig } from '../config/bot.js';
 import { getGuildConfig } from '../services/config/guildConfig.js';
-import { getWelcomeConfig } from '../utils/database.js';
+import { getWelcomeConfig, getFromDb, setInDb } from '../utils/database.js';
 import { formatWelcomeMessage } from '../utils/welcome.js';
 import { logEvent, EVENT_TYPES } from '../services/loggingService.js';
 import { getServerCounters, updateCounter } from '../services/serverstatsService.js';
@@ -16,6 +16,61 @@ export default {
     try {
         const { guild, user } = member;
         
+        // ==========================================
+        // 1. INVITE TRACKING LOGIC (ADDED HERE)
+        // ==========================================
+        if (!user.bot) {
+            try {
+                const newInvites = await guild.invites.fetch().catch(() => null);
+                const oldInvites = member.client.inviteCache?.get(guild.id);
+                let usedInvite = null;
+
+                if (oldInvites && newInvites) {
+                    for (const newInvite of newInvites.values()) {
+                        const oldUses = oldInvites.get(newInvite.code) || 0;
+                        if (newInvite.uses > oldUses) {
+                            usedInvite = newInvite;
+                            break;
+                        }
+                    }
+                }
+
+                if (member.client.inviteCache && newInvites) {
+                    member.client.inviteCache.set(guild.id, new Map(newInvites.map((invite) => [invite.code, invite.uses])));
+                }
+
+                if (usedInvite && usedInvite.inviter && usedInvite.inviter.id !== user.id) {
+                    const inviter = usedInvite.inviter;
+                    const dbKey = `invite_reward_${guild.id}_${inviter.id}`;
+                    let userData = await getFromDb(dbKey, null);
+
+                    if (userData && userData.inviteCode === usedInvite.code) {
+                        userData.uses = (userData.uses || 0) + 1;
+                        await setInDb(dbKey, userData);
+
+                        if (userData.uses === 10) {
+                            try {
+                                const dmEmbed = new EmbedBuilder()
+                                    .setColor(0x57F287)
+                                    .setTitle('🎉 Invite Goal Reached!')
+                                    .setDescription(
+                                        'Congratulations! You have reached **10 successful invites**!\n\n' +
+                                        'Please open a ticket or contact staff to claim your reward:\n' +
+                                        '• **3-Day Access Key** OR **30% Off Discount**'
+                                    );
+                                await inviter.send({ embeds: [dmEmbed] });
+                            } catch (err) {
+                                // DMs closed, ignore
+                            }
+                        }
+                    }
+                }
+            } catch (inviteError) {
+                logger.debug('Error tracking invite in guildMemberAdd:', inviteError);
+            }
+        }
+        // ==========================================
+
         const config = await getGuildConfig(member.client, guild.id);
         
         const welcomeConfig = await getWelcomeConfig(member.client, guild.id);
@@ -26,8 +81,7 @@ export default {
             const channel = guild.channels.cache.get(welcomeChannelId);
             const me = guild.members.me;
             const permissions = channel?.isTextBased?.() && me ? channel.permissionsFor(me) : null;
-            // Skip only the welcome message if permissions are missing; the rest of the
-            // join pipeline (auto-role, verification, logging, counters) must still run.
+            
             if (permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) {
                 const formatData = { user, guild, member };
                 const welcomeMessage = formatWelcomeMessage(
