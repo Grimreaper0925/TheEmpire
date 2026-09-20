@@ -1,7 +1,7 @@
 import { MessageFlags } from 'discord.js';
-import { createEmbed, successEmbed } from '../../utils/embeds.js';
-import { logger } from '../../utils/logger.js';
-import { ErrorTypes, replyUserError, handleInteractionError } from '../../utils/errorHandler.js';
+import { createEmbed, successEmbed } from '../utils/embeds.js';
+import { logger } from '../utils/logger.js';
+import { ErrorTypes, replyUserError, handleInteractionError } from '../utils/errorHandler.js';
 
 export const counterDeleteActionHandler = {
     name: 'counter-delete',

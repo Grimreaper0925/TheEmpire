@@ -1,5 +1,54 @@
-import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionFlagsBits } from 'discord.js';
 import { getFromDb, setInDb } from '../utils/database.js';
+import { logger } from '../utils/logger.js';
+
+// Invites are permanently tied to the channel ID they were created in — if that
+// channel is one of the auto-reset channels in ready.js (cloned + deleted on a
+// timer), every invite created there dies the moment the reset runs. Resolve
+// the reset-tracked channel IDs for this guild so we can steer clear of them.
+async function getResetTrackedChannelIds(guildId) {
+    const trackedIds = new Set();
+
+    const configs = await getFromDb(`reset_chat_configs_${guildId}`, []);
+    if (Array.isArray(configs)) {
+        for (const cfg of configs) {
+            if (cfg?.channelId) trackedIds.add(cfg.channelId);
+        }
+    }
+
+    // Legacy single-object format, still read as a fallback by ready.js
+    const legacyCfg = await getFromDb(`reset_chat_config_${guildId}`, null);
+    if (legacyCfg?.channelId) trackedIds.add(legacyCfg.channelId);
+
+    return trackedIds;
+}
+
+// Picks a channel to create the personal invite in. If the channel the button
+// was clicked in is safe (not subject to auto-reset), use it as before. Otherwise
+// fall back to another text channel the bot can actually create invites in.
+async function resolveSafeInviteChannel(guild, currentChannel) {
+    const resetTrackedIds = await getResetTrackedChannelIds(guild.id);
+
+    if (!resetTrackedIds.has(currentChannel.id)) {
+        return { channel: currentChannel, wasRelocated: false };
+    }
+
+    logger.warn(`[Invite] /invite-panel is deployed in auto-reset channel ${currentChannel.id} (guild ${guild.id}); relocating invite creation to a stable channel.`);
+
+    const fallback = guild.channels.cache.find(ch =>
+        ch.isTextBased?.() &&
+        !resetTrackedIds.has(ch.id) &&
+        ch.viewable &&
+        ch.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.CreateInstantInvite)
+    );
+
+    if (!fallback) {
+        logger.warn(`[Invite] No safe fallback channel found in guild ${guild.id}; falling back to the auto-reset channel (invite will break on next reset).`);
+        return { channel: currentChannel, wasRelocated: false };
+    }
+
+    return { channel: fallback, wasRelocated: true };
+}
 
 export async function handleInviteButton(interaction) {
     const guildId = interaction.guild.id;
@@ -29,15 +78,26 @@ export async function handleInviteButton(interaction) {
     if (customId === 'invite_get_link' || customId.startsWith('invite_get_link')) {
         try {
             let inviteUrl = userData.inviteUrl;
+            let relocatedNotice = '';
 
             if (!inviteUrl || !userData.inviteCode) {
-                // Create a brand-new, unique invite link for THIS specific user only
-                const invite = await interaction.guild.invites.create(interaction.channel.id, {
+                // Create a brand-new, unique invite link for THIS specific user only.
+                // Avoid creating it in a channel that auto-resets (clone+delete), which
+                // would permanently break the invite the moment the reset runs.
+                const { channel: inviteChannel, wasRelocated } = await resolveSafeInviteChannel(interaction.guild, interaction.channel);
+                if (wasRelocated) {
+                    relocatedNotice = `\n⚠️ *This channel resets automatically, so your link was created in <#${inviteChannel.id}> to keep it from breaking. Admins: consider moving \`/invite-panel\` to a permanent channel.*`;
+                }
+
+                const invite = await interaction.guild.invites.create(inviteChannel.id, {
                     maxAge: 0,   // Never expires
                     maxUses: 0,  // Infinite uses
                     unique: true,
                     reason: `Unique personal invite link for ${interaction.user.tag} (${userId})`
-                }).catch(() => null);
+                }).catch(err => {
+                    logger.error(`[Invite] Failed to create invite for user ${userId} in guild ${guildId} (channel ${inviteChannel.id}):`, err);
+                    return null;
+                });
 
                 if (invite) {
                     userData.inviteCode = invite.code;
@@ -59,9 +119,16 @@ export async function handleInviteButton(interaction) {
                         client.invites.set(guildId, guildCache);
                     }
                     guildCache.set(invite.code, invite);
+                } else if (interaction.guild.vanityURLCode) {
+                    // Invite creation failed — fall back to the server's vanity link,
+                    // but this link will NOT be tracked/attributed to this user.
+                    inviteUrl = `https://discord.gg/${interaction.guild.vanityURLCode}`;
                 } else {
-                    // Invite creation failed — fall back, but this link will NOT be tracked
-                    inviteUrl = `https://discord.gg/${interaction.guild.vanityCode || ''}`;
+                    // No tracked invite and no vanity URL to fall back to — surface a
+                    // real error instead of silently handing out a broken discord.gg/ link.
+                    return await interaction.editReply({
+                        content: '❌ **Error:** Could not create your invite link. This is usually a missing **Create Invite** permission for the bot in this channel — please contact a server admin.'
+                    });
                 }
             }
 
@@ -74,7 +141,8 @@ export async function handleInviteButton(interaction) {
                         `• **Your Link:** \`${inviteUrl}\`\n` +
                         `• **Goal Required:** \`${config.goal} Invites\`\n\n` +
                         `🔒 **Locked Reward Choice:** \`${userData.rewardChoice}\`\n` +
-                        `> *Your reward preference is permanently locked in!*`,
+                        `> *Your reward preference is permanently locked in!*` +
+                        relocatedNotice,
                     components: []
                 });
             }
@@ -96,11 +164,13 @@ export async function handleInviteButton(interaction) {
                     `> Share your personal link below to start earning invite rewards.\n\n` +
                     `• **Your Link:** \`${inviteUrl}\`\n` +
                     `• **Goal Required:** \`${config.goal} Invites\`\n\n` +
-                    `> *Please select your preferred reward from the dropdown below. **Note: This choice will be permanently locked in!***`,
+                    `> *Please select your preferred reward from the dropdown below. **Note: This choice will be permanently locked in!***` +
+                    relocatedNotice,
                 components: [selectMenu]
             });
         } catch (err) {
-            return await interaction.editReply({ content: '❌ **Error:** Could not generate a unique tracking link. Please try again in a moment.' });
+            logger.error(`[Invite] Unexpected error in invite_get_link for user ${userId} in guild ${guildId}:`, err);
+            return await interaction.editReply({ content: '❌ **Error:** Could not generate a unique tracking link. Please try again in a moment.' }).catch(() => {});
         }
     }
 
