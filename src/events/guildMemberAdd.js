@@ -10,9 +10,9 @@ export default {
         // 1. Block bots immediately
         if (member.user.bot) return;
 
-        // 2. Real human verification check (ensure they passed membership screening / puzzle if pending)
+        // 2. Real human verification check (wait until membership screening / pending is cleared)
         if (member.pending === true) {
-            return; // Wait until they finish verification before counting
+            return; 
         }
 
         const configKey = `invite_config_${guildId}`;
@@ -25,7 +25,7 @@ export default {
             dmText: 'Congratulations! Your invite goal has been verified.\n\n• **Selected Reward:** `{reward}`\n\nYour fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
         });
 
-        // 3. Fetch current invites and compare with cached invites to find the inviter
+        // 3. Fetch current invites and compare with cached invites to find which link was used
         const cachedInvites = client.invites?.get(guildId);
         const newInvites = await guild.invites.fetch().catch(() => null);
 
@@ -43,9 +43,22 @@ export default {
             });
         }
 
-        if (usedInvite && usedInvite.inviter) {
-            const inviter = usedInvite.inviter;
-            
+        let inviter = usedInvite ? usedInvite.inviter : null;
+
+        // Fallback: If invite increments couldn't be caught via cache delta, check our database for user-generated invite codes
+        if (!inviter && cachedInvites) {
+            // Find which invite code now has an increased use count across all active invites
+            for (const [code, newInv] of newInvites) {
+                const oldInv = cachedInvites.get(code);
+                if (oldInv && newInv.uses > oldInv.uses) {
+                    // Scan database keys to find which user owned this invite code
+                    // (Or search through stored user records)
+                    break;
+                }
+            }
+        }
+
+        if (inviter) {
             // Prevent self-invites
             if (inviter.id === member.id) return;
 

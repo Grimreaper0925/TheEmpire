@@ -22,34 +22,40 @@ export async function handleInviteButton(interaction) {
     let userData = await getFromDb(userKey, {
         uses: 0,
         inviteCode: '',
+        inviteUrl: '',
         rewardChoice: null
     });
 
     if (customId === 'invite_get_link' || customId.startsWith('invite_get_link')) {
         try {
-            let invite = null;
-            if (interaction.channel && interaction.guild.members.me?.permissions.has('CreateInstantInvite')) {
-                invite = await interaction.guild.invites.create(interaction.channel.id, {
-                    maxAge: 0,
-                    maxUses: 0,
-                    reason: `Personal invite tracking link for ${interaction.user.tag}`
+            // Check if the user already has an active unique invite code stored
+            let inviteUrl = userData.inviteUrl;
+
+            if (!inviteUrl || !userData.inviteCode) {
+                // Create a brand-new, unique invite link for THIS specific user only
+                const invite = await interaction.guild.invites.create(interaction.channel.id, {
+                    maxAge: 0, // Never expires
+                    maxUses: 0, // Infinite uses so they can hit their goal of 10+
+                    unique: true, // Forces Discord to generate a fresh unique code
+                    reason: `Unique personal invite link for ${interaction.user.tag} (${userId})`
                 }).catch(() => null);
-            }
 
-            let inviteUrl = invite ? invite.url : `https://discord.gg/${interaction.guild.vanityCode || ''}`;
-            if (!inviteUrl || inviteUrl === 'https://discord.gg/') {
-                inviteUrl = `https://discord.com`;
+                if (invite) {
+                    userData.inviteCode = invite.code;
+                    userData.inviteUrl = invite.url;
+                    inviteUrl = invite.url;
+                    await setInDb(userKey, userData);
+                } else {
+                    inviteUrl = `https://discord.gg/${interaction.guild.vanityCode || ''}`;
+                }
             }
-
-            userData.inviteCode = invite ? invite.code : '';
-            await setInDb(userKey, userData);
 
             // IF ALREADY LOCKED IN, HIDE DROPDOWN & SHOW LOCKED STATUS
             if (userData.rewardChoice) {
                 return await interaction.editReply({
                     content: 
-                        `# 🔗 __Your Personal Invite Link__\n` +
-                        `> Share your unique link below to start earning invite rewards.\n\n` +
+                        `# 🔗 __Your Unique Personal Invite Link__\n` +
+                        `> Share your personal link below to start earning invite rewards.\n\n` +
                         `• **Your Link:** \`${inviteUrl}\`\n` +
                         `• **Goal Required:** \`${config.goal} Invites\`\n\n` +
                         `🔒 **Locked Reward Choice:** \`${userData.rewardChoice}\`\n` +
@@ -71,15 +77,15 @@ export async function handleInviteButton(interaction) {
 
             return await interaction.editReply({
                 content: 
-                    `# 🔗 __Your Personal Invite Link__\n` +
-                    `> Share your unique link below to start earning invite rewards.\n\n` +
+                    `# 🔗 __Your Unique Personal Invite Link__\n` +
+                    `> Share your personal link below to start earning invite rewards.\n\n` +
                     `• **Your Link:** \`${inviteUrl}\`\n` +
                     `• **Goal Required:** \`${config.goal} Invites\`\n\n` +
                     `> *Please select your preferred reward from the dropdown below. **Note: This choice will be permanently locked in!***`,
                 components: [selectMenu]
             });
         } catch (err) {
-            return await interaction.editReply({ content: '❌ **Error:** Could not generate a tracking link. Please check my channel permissions.' });
+            return await interaction.editReply({ content: '❌ **Error:** Could not generate a unique tracking link. Make sure I have "Manage Server" or "Create Invite" permissions.' });
         }
     }
 
