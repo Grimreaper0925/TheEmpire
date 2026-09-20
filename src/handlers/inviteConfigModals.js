@@ -6,7 +6,6 @@ export const inviteConfigModalHandler = {
     async execute(interaction, client) {
         if (!interaction.memberPermissions?.has('Administrator')) return;
 
-        // Acknowledge the modal so Discord doesn't crash
         await interaction.deferUpdate();
 
         const guildId = interaction.guild.id;
@@ -27,7 +26,6 @@ export const inviteConfigModalHandler = {
 
         await setInDb(configKey, config);
 
-        // Instantly Refresh the Probot Dashboard Embed!
         const embed = new EmbedBuilder()
             .setColor(config.color || '#5865F2')
             .setTitle('⚙️ __Invite Rewards Configuration__')

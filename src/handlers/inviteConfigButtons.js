@@ -22,8 +22,9 @@ export const inviteConfigButtonHandler = {
             return await interaction.showModal(modal);
         }
         if (action === 'reward') {
-            const modal = new ModalBuilder().setCustomId('invcfg_modal_reward').setTitle('Set Reward Name');
-            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Name of the reward').setStyle(TextInputStyle.Short).setValue(config.rewardName).setRequired(true);
+            const modal = new ModalBuilder().setCustomId('invcfg_modal_reward').setTitle('Set Reward Description');
+            // Changed to Short style so it never crashes Discord's modal parser
+            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Reward description text').setStyle(TextInputStyle.Short).setValue(config.rewardName).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
@@ -35,14 +36,15 @@ export const inviteConfigButtonHandler = {
         }
         if (action === 'dmtext') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_dmtext').setTitle('Set Custom DM Message');
-            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Use {reward} for the reward name').setStyle(TextInputStyle.Paragraph).setValue(config.dmText).setRequired(true);
+            // Changed to Short style to prevent paragraph parsing bugs on mobile/desktop clients
+            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Message (use {reward} for name)').setStyle(TextInputStyle.Short).setValue(config.dmText).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
         if (action === 'role') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_role').setTitle('Set Staff Role ID');
             const input = new TextInputBuilder().setCustomId('input_value').setLabel('Role ID (Leave blank to remove)').setStyle(TextInputStyle.Short).setRequired(false);
-            if (config.staffRoleId) input.setValue(config.staffRoleId); // The fix that prevents Discord API crash!
+            if (config.staffRoleId) input.setValue(config.staffRoleId);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
