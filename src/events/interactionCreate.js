@@ -18,6 +18,7 @@ import { resolveSlashAccessKey } from '../utils/messageAdapter.js';
 import { isCollectorManagedComponent } from '../utils/collectorComponents.js';
 import { ResponseCoordinator } from '../utils/responseCoordinator.js';
 import { enforceDefaultCommandPermissions } from '../utils/permissionGuard.js';
+import { handleInviteButton } from '../handlers/inviteButtons.js';
 
 const COMMAND_ERROR_SUBTYPES = {
     warn: 'warn_failed',
@@ -283,13 +284,7 @@ export default {
                 } else if (interaction.isButton()) {
                     if (interaction.customId.startsWith('invite_')) {
                         try {
-                            const inviteModule = await import('../handlers/inviteButtons.js');
-                            const handlerFn = inviteModule.handleInviteButton || inviteModule.default?.execute;
-                            if (handlerFn) {
-                                await handlerFn(interaction);
-                            } else {
-                                throw new Error('Invite button handler function not found.');
-                            }
+                            await handleInviteButton(interaction);
                         } catch (error) {
                             await handleInteractionError(interaction, error, withTraceContext({
                                 type: 'button',
