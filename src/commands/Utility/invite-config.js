@@ -1,16 +1,15 @@
-import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'javascript' // (or discord.js)
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { getFromDb, setInDb } from '../../utils/database.js';
 
 export default {
     data: new SlashCommandBuilder()
         .setName('invite-config')
-        .setDescription('Configure invite reward goals, embed colors, and notification channels')
+        .setDescription('Configure invite reward goals, embed colors, and notification settings')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return await interaction.reply({ content: 'You need Administrator permissions.', ephemeral: true });
+            return await interaction.reply({ content: '❌ You need **Administrator** permissions to use this command.', ephemeral: true });
         }
 
         const guildId = interaction.guild.id;
@@ -19,23 +18,25 @@ export default {
 
         const embed = new EmbedBuilder()
             .setColor(config.color)
-            .setTitle('⚙️ Invite Rewards Dashboard')
-            .setDescription('Manage your server invite reward settings below:')
-            .addFields(
-                { name: 'Target Goal', value: `\`${config.goal} invites\``, inline: true },
-                { name: 'Embed Color', value: `\`${config.color}\``, inline: true },
-                { name: 'Staff Alert Channel', value: config.alertChannelId ? `<#${config.alertChannelId}>` : '`Not Set`', inline: false }
-            );
+            .setTitle('⚙️ __Invite Rewards Dashboard__')
+            .setDescription(
+                '> Manage your server invite reward system dynamically.\n\n' +
+                '• **Target Goal:** `✨ ' + config.goal + ' successful invites`\n' +
+                '• **Embed Color:** `' + config.color + '`\n' +
+                '• **Staff Channel:** ' + (config.alertChannelId ? `<#${config.alertChannelId}>` : '`Not Set`')
+            )
+            .setFooter({ text: 'The Empire • Configuration System' })
+            .setTimestamp();
 
         const selectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('invite_config_select')
-                .setPlaceholder('Choose a setting to change...')
+                .setPlaceholder('🛠️ Choose a configuration option...')
                 .addOptions([
-                    { label: 'Set Goal to 10 Invites', value: 'set_goal_10' },
-                    { label: 'Set Goal to 5 Invites', value: 'set_goal_5' },
-                    { label: 'Set Current Channel for Staff Alerts', value: 'set_alert_channel' },
-                    { label: 'Toggle Theme Color (Purple/Green)', value: 'toggle_color' }
+                    { label: 'Set Goal to 10 Invites', description: 'Requires users to get 10 invites for rewards', value: 'set_goal_10', emoji: '🎯' },
+                    { label: 'Set Goal to 5 Invites', description: 'Requires users to get 5 invites for rewards', value: 'set_goal_5', emoji: '🎯' },
+                    { label: 'Set Alert Channel to Current Channel', description: 'Sends staff fulfillment alerts here', value: 'set_alert_channel', emoji: '📢' },
+                    { label: 'Toggle Accent Color (Purple/Green)', description: 'Switch dashboard aesthetic theme', value: 'toggle_color', emoji: '🎨' }
                 ])
         );
 
