@@ -17,12 +17,12 @@ export default {
             color: '#5865F2', 
             rewardName: '3-Day Access Key', 
             alertChannelId: '', 
-            staffRoleId: ''
+            staffRoleId: '',
+            dmText: 'Congratulations! Your invite goal has been verified.\n\n• **Selected Reward:** `{reward}`\n\nYour fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
         });
 
-        // Pull the user's actual selected reward choice from their session if available
-        let userData = await getFromDb(userKey, { rewardChoice: '3-Day Access Key' });
-        const selectedReward = userData.rewardChoice || config.rewardName || '3-Day Access Key';
+        let userData = await getFromDb(userKey, { rewardChoice: config.rewardName || '3-Day Access Key' });
+        const activeReward = userData.rewardChoice || config.rewardName || '3-Day Access Key';
 
         const action = args[0];
 
@@ -44,6 +44,12 @@ export default {
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
+        if (action === 'dmtext') {
+            const modal = new ModalBuilder().setCustomId('invcfg_modal_dmtext').setTitle('Set Custom DM Message');
+            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Message (use {reward} for name)').setStyle(TextInputStyle.Short).setValue(config.dmText).setRequired(true);
+            modal.addComponents(new ActionRowBuilder().addComponents(input));
+            return await interaction.showModal(modal);
+        }
         if (action === 'role') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_role').setTitle('Set Staff Role ID');
             const input = new TextInputBuilder().setCustomId('input_value').setLabel('Role ID (Leave blank to remove)').setStyle(TextInputStyle.Short).setRequired(false);
@@ -58,19 +64,17 @@ export default {
         }
         if (action === 'test') {
             try {
-                // --- EXACT IMAGE 1 STYLE USER DM ---
+                // --- USES YOUR CUSTOM DM TEXT TEMPLATE AND REPLACES {reward} PROPERLY ---
+                const rawDmTemplate = config.dmText || 'Congratulations! Your invite goal has been verified.\n\n• **Selected Reward:** `{reward}`\n\nYour fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.';
+                const formattedDescription = rawDmTemplate.replace('{reward}', activeReward);
+
                 const userDmEmbed = new EmbedBuilder()
                     .setColor(config.color || 0x5865F2)
                     .setTitle('Invite Goal Achieved!')
-                    .setDescription(
-                        '| Congratulations! Your invite goal has been verified.\n\n' +
-                        `• **Selected Reward:** \`${selectedReward}\`\n\n` +
-                        'Your fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
-                    );
+                    .setDescription(formattedDescription);
 
                 await interaction.user.send({ embeds: [userDmEmbed] });
 
-                // --- STAFF TAG NOTIFICATION ALERT ---
                 const roleMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : `<@${interaction.user.id}>`;
                 const staffEmbed = new EmbedBuilder()
                     .setColor(0xFEE75C)
@@ -79,7 +83,7 @@ export default {
                         `> A member has completed the invite target and selected their reward!\n\n` +
                         `• **Member:** ${interaction.user} (\`${interaction.user.id}\`)\n` +
                         `• **Target Goal:** \`${config.goal} Invites\`\n` +
-                        `• **Chosen Reward:** \`${selectedReward}\`\n\n` +
+                        `• **Chosen Reward:** \`${activeReward}\`\n\n` +
                         '> *Use `/deliver-reward [user] [key]` to fulfill this request.*'
                     )
                     .setTimestamp();
@@ -93,7 +97,7 @@ export default {
                     await interaction.user.send({ content: `🔔 **Staff Alert Preview:**`, embeds: [staffEmbed] });
                 }
 
-                return await interaction.reply({ content: '✅ **Test Workflow Sent!** Check your DMs for Image 1 style layout and your channel for the staff tag.', ephemeral: true });
+                return await interaction.reply({ content: '✅ **Test Workflow Sent!** Check your DMs—it now uses your custom template with your selected reward filled in!', ephemeral: true });
             } catch (e) {
                 return await interaction.reply({ content: '❌ Test failed. Please open your DMs.', ephemeral: true });
             }
