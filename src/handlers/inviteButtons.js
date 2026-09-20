@@ -9,7 +9,6 @@ export async function handleInviteButton(interaction) {
 
     const customId = interaction.customId;
 
-    // DEFER IMMEDIATELY so Discord never times out
     if (!interaction.deferred && !interaction.replied) {
         await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
@@ -22,12 +21,12 @@ export async function handleInviteButton(interaction) {
 
     let userData = await getFromDb(userKey, {
         uses: 0,
-        inviteCode: ''
+        inviteCode: '',
+        rewardChoice: null
     });
 
     if (customId === 'invite_get_link' || customId.startsWith('invite_get_link')) {
         try {
-            // Try to create an invite safely
             let invite = null;
             if (interaction.channel && interaction.guild.members.me?.permissions.has('CreateInstantInvite')) {
                 invite = await interaction.guild.invites.create(interaction.channel.id, {
@@ -39,16 +38,31 @@ export async function handleInviteButton(interaction) {
 
             let inviteUrl = invite ? invite.url : `https://discord.gg/${interaction.guild.vanityCode || ''}`;
             if (!inviteUrl || inviteUrl === 'https://discord.gg/') {
-                inviteUrl = `https://discord.com`; // Fallback placeholder if no vanity or permissions
+                inviteUrl = `https://discord.com`;
             }
 
             userData.inviteCode = invite ? invite.code : '';
             await setInDb(userKey, userData);
 
+            // IF ALREADY LOCKED IN, HIDE DROPDOWN & SHOW LOCKED STATUS
+            if (userData.rewardChoice) {
+                return await interaction.editReply({
+                    content: 
+                        `# 🔗 __Your Personal Invite Link__\n` +
+                        `> Share your unique link below to start earning invite rewards.\n\n` +
+                        `• **Your Link:** \`${inviteUrl}\`\n` +
+                        `• **Goal Required:** \`${config.goal} Invites\`\n\n` +
+                        `🔒 **Locked Reward Choice:** \`${userData.rewardChoice}\`\n` +
+                        `> *Your reward preference is permanently locked in!*`,
+                    components: []
+                });
+            }
+
+            // SHOW DROPDOWN IF NOT CHOSEN YET
             const selectMenu = new ActionRowBuilder().addComponents(
                 new StringSelectMenuBuilder()
                     .setCustomId('invite_choose_reward')
-                    .setPlaceholder('🎁 Select your desired reward...')
+                    .setPlaceholder('🎁 Select your desired reward (Locks in permanently)...')
                     .addOptions([
                         { label: config.rewardName || '3-Day Access Key', value: 'reward_1', description: 'Primary community access key' },
                         { label: '30% Off Discount', value: 'reward_2', description: 'Exclusive store discount voucher' }
@@ -61,7 +75,7 @@ export async function handleInviteButton(interaction) {
                     `> Share your unique link below to start earning invite rewards.\n\n` +
                     `• **Your Link:** \`${inviteUrl}\`\n` +
                     `• **Goal Required:** \`${config.goal} Invites\`\n\n` +
-                    `> *Please select your preferred reward from the dropdown menu below so administration knows what to fulfill.*`,
+                    `> *Please select your preferred reward from the dropdown below. **Note: This choice will be permanently locked in!***`,
                 components: [selectMenu]
             });
         } catch (err) {
@@ -80,7 +94,8 @@ export async function handleInviteButton(interaction) {
             .setDescription(
                 `Here are your current community invite stats:\n\n` +
                 `• **Successful Invites:** \`${currentUses} /${targetGoal}\`\n` +
-                `• **Progress:** \`${progressPercent}%\`\n\n` +
+                `• **Progress:** \`${progressPercent}%\`\n` +
+                `• **Locked Reward:** \`${userData.rewardChoice || 'Not Selected Yet'}\`\n\n` +
                 (currentUses >= targetGoal 
                     ? '🎉 **Goal Achieved!** Check your DMs for your fulfillment confirmation.' 
                     : `> *Keep sharing your link! You need **${targetGoal - currentUses} more invites** to reach your goal.*`)
