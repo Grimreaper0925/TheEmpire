@@ -28,15 +28,14 @@ export async function handleInviteButton(interaction) {
 
     if (customId === 'invite_get_link' || customId.startsWith('invite_get_link')) {
         try {
-            // Check if the user already has an active unique invite code stored
             let inviteUrl = userData.inviteUrl;
 
             if (!inviteUrl || !userData.inviteCode) {
                 // Create a brand-new, unique invite link for THIS specific user only
                 const invite = await interaction.guild.invites.create(interaction.channel.id, {
-                    maxAge: 0, // Never expires
-                    maxUses: 0, // Infinite uses so they can hit their goal of 10+
-                    unique: true, // Forces Discord to generate a fresh unique code
+                    maxAge: 0,   // Never expires
+                    maxUses: 0,  // Infinite uses
+                    unique: true,
                     reason: `Unique personal invite link for ${interaction.user.tag} (${userId})`
                 }).catch(() => null);
 
@@ -45,7 +44,23 @@ export async function handleInviteButton(interaction) {
                     userData.inviteUrl = invite.url;
                     inviteUrl = invite.url;
                     await setInDb(userKey, userData);
+
+                    // Reverse lookup: code -> owner, so guildMemberAdd can find the
+                    // real owner instead of trusting invite.inviter (which is always the bot)
+                    await setInDb(`invite_owner_${guildId}_${invite.code}`, userId);
+
+                    // Seed the bot's invite cache immediately so the very first use
+                    // of this brand-new code isn't invisible to the next diff check
+                    const client = interaction.client;
+                    client.invites = client.invites || new Map();
+                    let guildCache = client.invites.get(guildId);
+                    if (!guildCache) {
+                        guildCache = await interaction.guild.invites.fetch().catch(() => new Map());
+                        client.invites.set(guildId, guildCache);
+                    }
+                    guildCache.set(invite.code, invite);
                 } else {
+                    // Invite creation failed — fall back, but this link will NOT be tracked
                     inviteUrl = `https://discord.gg/${interaction.guild.vanityCode || ''}`;
                 }
             }
@@ -53,7 +68,7 @@ export async function handleInviteButton(interaction) {
             // IF ALREADY LOCKED IN, HIDE DROPDOWN & SHOW LOCKED STATUS
             if (userData.rewardChoice) {
                 return await interaction.editReply({
-                    content: 
+                    content:
                         `# 🔗 __Your Unique Personal Invite Link__\n` +
                         `> Share your personal link below to start earning invite rewards.\n\n` +
                         `• **Your Link:** \`${inviteUrl}\`\n` +
@@ -76,7 +91,7 @@ export async function handleInviteButton(interaction) {
             );
 
             return await interaction.editReply({
-                content: 
+                content:
                     `# 🔗 __Your Unique Personal Invite Link__\n` +
                     `> Share your personal link below to start earning invite rewards.\n\n` +
                     `• **Your Link:** \`${inviteUrl}\`\n` +
@@ -85,7 +100,7 @@ export async function handleInviteButton(interaction) {
                 components: [selectMenu]
             });
         } catch (err) {
-            return await interaction.editReply({ content: '❌ **Error:** Could not generate a unique tracking link. Make sure I have "Manage Server" or "Create Invite" permissions.' });
+            return await interaction.editReply({ content: '❌ **Error:** Could not generate a unique tracking link. Please try again in a moment.' });
         }
     }
 
@@ -102,8 +117,8 @@ export async function handleInviteButton(interaction) {
                 `• **Successful Invites:** \`${currentUses} /${targetGoal}\`\n` +
                 `• **Progress:** \`${progressPercent}%\`\n` +
                 `• **Locked Reward:** \`${userData.rewardChoice || 'Not Selected Yet'}\`\n\n` +
-                (currentUses >= targetGoal 
-                    ? '🎉 **Goal Achieved!** Check your DMs for your fulfillment confirmation.' 
+                (currentUses >= targetGoal
+                    ? '🎉 **Goal Achieved!** Check your DMs for your fulfillment confirmation.'
                     : `> *Keep sharing your link! You need **${targetGoal - currentUses} more invites** to reach your goal.*`)
             )
             .setTimestamp();
