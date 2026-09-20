@@ -39,16 +39,16 @@ export default {
             .setTimestamp();
 
         const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('invcfg_btn_goal').setLabel('Edit Goal').setStyle(ButtonStyle.Primary).setEmoji('🎯'),
-            new ButtonBuilder().setCustomId('invcfg_btn_reward').setLabel('Edit Reward').setStyle(ButtonStyle.Primary).setEmoji('🎁'),
-            new ButtonBuilder().setCustomId('invcfg_btn_color').setLabel('Edit Color').setStyle(ButtonStyle.Secondary).setEmoji('🎨'),
-            new ButtonBuilder().setCustomId('invcfg_btn_dmtext').setLabel('Edit DM Text').setStyle(ButtonStyle.Secondary).setEmoji('💬')
+            new ButtonBuilder().setCustomId('invcfg_btn:goal').setLabel('Edit Goal').setStyle(ButtonStyle.Primary).setEmoji('🎯'),
+            new ButtonBuilder().setCustomId('invcfg_btn:reward').setLabel('Edit Reward').setStyle(ButtonStyle.Primary).setEmoji('🎁'),
+            new ButtonBuilder().setCustomId('invcfg_btn:color').setLabel('Edit Color').setStyle(ButtonStyle.Secondary).setEmoji('🎨'),
+            new ButtonBuilder().setCustomId('invcfg_btn:dmtext').setLabel('Edit DM Text').setStyle(ButtonStyle.Secondary).setEmoji('💬')
         );
 
         const row2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('invcfg_btn_role').setLabel('Set Staff Role').setStyle(ButtonStyle.Secondary).setEmoji('🛡️'),
-            new ButtonBuilder().setCustomId('invcfg_btn_channel').setLabel('Set Alert Channel Here').setStyle(ButtonStyle.Success).setEmoji('📢'),
-            new ButtonBuilder().setCustomId('invcfg_btn_test').setLabel('Test Delivery Workflow').setStyle(ButtonStyle.Danger).setEmoji('🚀')
+            new ButtonBuilder().setCustomId('invcfg_btn:role').setLabel('Set Staff Role').setStyle(ButtonStyle.Secondary).setEmoji('🛡️'),
+            new ButtonBuilder().setCustomId('invcfg_btn:channel').setLabel('Set Alert Channel Here').setStyle(ButtonStyle.Success).setEmoji('📢'),
+            new ButtonBuilder().setCustomId('invcfg_btn:test').setLabel('Test Delivery Workflow').setStyle(ButtonStyle.Danger).setEmoji('🚀')
         );
 
         await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
