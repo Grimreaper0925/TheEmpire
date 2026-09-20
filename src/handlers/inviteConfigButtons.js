@@ -10,18 +10,19 @@ export default {
 
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
+        const userKey = `invite_user_${guildId}_${interaction.user.id}`;
+
         let config = await getFromDb(configKey, {
             goal: 10, 
             color: '#5865F2', 
             rewardName: '3-Day Access Key', 
             alertChannelId: '', 
-            staffRoleId: '',
-            dmText: '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`\n\nPlease wait up to 24 hours for staff to send your access key!'
+            staffRoleId: ''
         });
 
-        // Safeguards to prevent undefined text
-        if (!config.rewardName) config.rewardName = '3-Day Access Key';
-        if (!config.dmText) config.dmText = '🎉 **Congratulations!** Your invite goal has been verified.\n\n• **Reward:** `{reward}`';
+        // Pull the user's actual selected reward choice from their session if available
+        let userData = await getFromDb(userKey, { rewardChoice: '3-Day Access Key' });
+        const selectedReward = userData.rewardChoice || config.rewardName || '3-Day Access Key';
 
         const action = args[0];
 
@@ -32,20 +33,14 @@ export default {
             return await interaction.showModal(modal);
         }
         if (action === 'reward') {
-            const modal = new ModalBuilder().setCustomId('invcfg_modal_reward').setTitle('Set Reward Description');
-            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Reward description text').setStyle(TextInputStyle.Short).setValue(config.rewardName).setRequired(true);
+            const modal = new ModalBuilder().setCustomId('invcfg_modal_reward').setTitle('Set Default Reward');
+            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Default reward description').setStyle(TextInputStyle.Short).setValue(config.rewardName || '3-Day Access Key').setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
         if (action === 'color') {
             const modal = new ModalBuilder().setCustomId('invcfg_modal_color').setTitle('Set Embed Hex Color');
             const input = new TextInputBuilder().setCustomId('input_value').setLabel('Hex Color (e.g. #5865F2)').setStyle(TextInputStyle.Short).setValue(config.color || '#5865F2').setRequired(true);
-            modal.addComponents(new ActionRowBuilder().addComponents(input));
-            return await interaction.showModal(modal);
-        }
-        if (action === 'dmtext') {
-            const modal = new ModalBuilder().setCustomId('invcfg_modal_dmtext').setTitle('Set Custom DM Message');
-            const input = new TextInputBuilder().setCustomId('input_value').setLabel('Message (use {reward} for name)').setStyle(TextInputStyle.Short).setValue(config.dmText).setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
             return await interaction.showModal(modal);
         }
@@ -59,24 +54,46 @@ export default {
         if (action === 'channel') {
             config.alertChannelId = interaction.channelId;
             await setInDb(configKey, config);
-            return await interaction.reply({ content: `✅ Staff alert channel set to <#${config.alertChannelId}>! Run \`/invite-config\` again to refresh panel.`, ephemeral: true });
+            return await interaction.reply({ content: `✅ Staff alert channel set to <#${config.alertChannelId}>!`, ephemeral: true });
         }
         if (action === 'test') {
             try {
-                const parsedDmText = (config.dmText || 'Here is your reward: {reward}').replace('{reward}', config.rewardName);
-                const userDmEmbed = new EmbedBuilder().setColor(config.color || '#5865F2').setTitle('✅ __Test Delivery__').setDescription(parsedDmText + '\n\n**Test Key:** `TEST-KEY-123`').setTimestamp();
+                // --- EXACT IMAGE 1 STYLE USER DM ---
+                const userDmEmbed = new EmbedBuilder()
+                    .setColor(config.color || 0x5865F2)
+                    .setTitle('Invite Goal Achieved!')
+                    .setDescription(
+                        '| Congratulations! Your invite goal has been verified.\n\n' +
+                        `• **Selected Reward:** \`${selectedReward}\`\n\n` +
+                        'Your fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
+                    );
+
                 await interaction.user.send({ embeds: [userDmEmbed] });
 
-                const roleMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : `Staff`;
-                const staffEmbed = new EmbedBuilder().setColor('#FEE75C').setTitle('🔔 Test Staff Alert').setDescription(`User ${interaction.user} just reached their goal of **${config.goal}** invites!\nReward: **${config.rewardName}**`).setTimestamp();
+                // --- STAFF TAG NOTIFICATION ALERT ---
+                const roleMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : `<@${interaction.user.id}>`;
+                const staffEmbed = new EmbedBuilder()
+                    .setColor(0xFEE75C)
+                    .setTitle('⏳ __Pending Reward Fulfillment Required__')
+                    .setDescription(
+                        `> A member has completed the invite target and selected their reward!\n\n` +
+                        `• **Member:** ${interaction.user} (\`${interaction.user.id}\`)\n` +
+                        `• **Target Goal:** \`${config.goal} Invites\`\n` +
+                        `• **Chosen Reward:** \`${selectedReward}\`\n\n` +
+                        '> *Use `/deliver-reward [user] [key]` to fulfill this request.*'
+                    )
+                    .setTimestamp();
 
                 if (config.alertChannelId) {
                     const ch = interaction.guild.channels.cache.get(config.alertChannelId);
-                    if (ch) await ch.send({ content: roleMention, embeds: [staffEmbed] });
+                    if (ch) {
+                        await ch.send({ content: `🔔 Attention ${roleMention}:`, embeds: [staffEmbed] });
+                    }
                 } else {
-                    await interaction.user.send({ content: `[Staff Alert Preview]:`, embeds: [staffEmbed] });
+                    await interaction.user.send({ content: `🔔 **Staff Alert Preview:**`, embeds: [staffEmbed] });
                 }
-                return await interaction.reply({ content: '✅ Workflow test complete! Check your DMs and alert channel.', ephemeral: true });
+
+                return await interaction.reply({ content: '✅ **Test Workflow Sent!** Check your DMs for Image 1 style layout and your channel for the staff tag.', ephemeral: true });
             } catch (e) {
                 return await interaction.reply({ content: '❌ Test failed. Please open your DMs.', ephemeral: true });
             }
