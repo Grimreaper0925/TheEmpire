@@ -47,34 +47,34 @@ export const inviteConfigSelectHandler = {
             return await interaction.reply({ content: `✅ Staff alert channel successfully set to <#${config.alertChannelId}>!`, ephemeral: true });
         }
 
-        // --- TEST FULL WORKFLOW SIMULATION ---
+        // --- MODERN CLEAN TEST WORKFLOW SIMULATION ---
         if (selectedValue === 'test_full_workflow') {
             try {
-                // 1. Modern Clean DM to the User (You)
+                // 1. Modern Clean DM Confirmation to User
                 const userDmEmbed = new EmbedBuilder()
                     .setColor(config.color || 0x5865F2)
                     .setTitle('🎉 __Invite Goal Achieved!__')
                     .setDescription(
-                        '> **Congratulations!** You have successfully unlocked your reward tier.\n\n' +
-                        `• **Unlocked Reward:** \`${config.rewardName}\`\n\n' +
-                        'Your fulfillment request has been transmitted to server administration. Please allow up to **24 hours** for verification and secure delivery right here via DM.'
+                        '> **Congratulations!** Your invite goal has been verified.\n\n' +
+                        `• **Selected Reward:** \`${config.rewardName}\`\n\n` +
+                        'Your fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
                     )
-                    .setFooter({ text: 'The Empire • Automated Verification' })
+                    .setFooter({ text: 'The Empire • Automated Reward System' })
                     .setTimestamp();
 
                 await interaction.user.send({ embeds: [userDmEmbed] });
 
-                // 2. Modern Clean Staff Notification (Tagged Role or Channel)
+                // 2. Modern Clean Staff Notification Alert
                 const roleMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : `<@${interaction.user.id}>`;
                 const staffEmbed = new EmbedBuilder()
                     .setColor(0xFEE75C)
                     .setTitle('⏳ __Pending Reward Fulfillment Required__')
                     .setDescription(
-                        `> A member has completed the requirements and is waiting for fulfillment!\n\n` +
-                        `• **User:** ${interaction.user} (\`${interaction.user.id}\`)\n` +
-                        `• **Goal Reached:** \`${config.goal} Invites\`\n` +
-                        `• **Target Reward:** \`${config.rewardName}\`\n\n` +
-                        '> *Use `/deliver-reward [user] [key]` to fulfill this delivery within 24 hours.*'
+                        `> A member has completed the invite target and selected their reward!\n\n` +
+                        `• **Member:** ${interaction.user} (\`${interaction.user.id}\`)\n` +
+                        `• **Target Goal:** \`${config.goal} Invites\`\n` +
+                        `• **Chosen Reward:** \`${config.rewardName}\`\n\n` +
+                        '> *Use `/deliver-reward [user] [key]` to fulfill this request within 24 hours.*'
                     )
                     .setTimestamp();
 
@@ -84,12 +84,11 @@ export const inviteConfigSelectHandler = {
                         await channel.send({ content: `🔔 Attention ${roleMention}:`, embeds: [staffEmbed] });
                     }
                 } else {
-                    // Fallback to sending staff alert to admin's DM if no channel is set
-                    await interaction.user.send({ content: `🔔 **Staff Alert (Simulation):**`, embeds: [staffEmbed] });
+                    await interaction.user.send({ content: `🔔 **Staff Alert Preview (No Channel Set):**`, embeds: [staffEmbed] });
                 }
 
                 return await interaction.reply({ 
-                    content: '🚀 **Full Simulation Sent!** Check your DMs for the user confirmation message and staff alert.', 
+                    content: '🚀 **Full Workflow Simulation Sent!** Check your DMs for the user confirmation message, and watch your staff channel for the tagged alert.', 
                     ephemeral: true 
                 });
             } catch (err) {
