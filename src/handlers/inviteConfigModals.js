@@ -2,9 +2,12 @@ import { EmbedBuilder } from 'discord.js';
 import { getFromDb, setInDb } from '../../utils/database.js';
 
 export default {
-    name: 'invcfg_modal_',
+    name: 'invcfg_modal', // Or match whatever your interactions loader expects for modals starting with invcfg_modal
     async execute(interaction, client) {
         if (!interaction.memberPermissions?.has('Administrator')) return;
+
+        // Check if this modal is indeed an invite config modal
+        if (!interaction.customId.startsWith('invcfg_modal_')) return;
 
         await interaction.deferUpdate();
 
