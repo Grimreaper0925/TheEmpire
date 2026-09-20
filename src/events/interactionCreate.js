@@ -348,7 +348,6 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isStringSelectMenu()) {
-                    // --- INVITE CONFIG SELECT MENU ROUTE ---
                     if (interaction.customId === 'invite_config_select') {
                         try {
                             const { inviteConfigSelectHandler } = await import('../handlers/inviteConfigSelect.js');
@@ -362,7 +361,6 @@ export default {
                         }
                         return;
                     }
-                    // -------------------------------------
 
                     const [customId, ...args] = interaction.customId.split(':');
                     const selectMenu = client.selectMenus.get(customId);
@@ -389,6 +387,22 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isModalSubmit()) {
+                    // --- INVITE CONFIG MODAL ROUTE ---
+                    if (interaction.customId.startsWith('invite_modal_')) {
+                        try {
+                            const { inviteConfigModalHandler } = await import('../handlers/inviteConfigModals.js');
+                            await inviteConfigModalHandler.execute(interaction, client);
+                        } catch (error) {
+                            await handleInteractionError(interaction, error, withTraceContext({
+                                type: 'modal',
+                                customId: interaction.customId,
+                                handler: 'invite_modal'
+                            }, interactionTraceContext));
+                        }
+                        return;
+                    }
+                    // ---------------------------------
+
                     if (
                         interaction.customId.startsWith('app_review_')
                         || interaction.customId.startsWith('jtc_')

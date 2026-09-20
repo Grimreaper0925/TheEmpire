@@ -1,4 +1,4 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 import { getFromDb, setInDb } from '../utils/database.js';
 
 export const inviteConfigSelectHandler = {
@@ -10,35 +10,69 @@ export const inviteConfigSelectHandler = {
 
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
-        let config = await getFromDb(configKey, { goal: 10, color: '#5865F2', alertChannelId: '' });
+        let config = await getFromDb(configKey, { 
+            goal: 10, 
+            color: '#5865F2', 
+            rewardName: '3-Day Access Key & 30% Off Discount',
+            alertChannelId: '' 
+        });
 
         const selectedValue = interaction.values[0];
 
-        if (selectedValue === 'set_goal_10') {
-            config.goal = 10;
-        } else if (selectedValue === 'set_goal_5') {
-            config.goal = 5;
-        } else if (selectedValue === 'set_alert_channel') {
+        // 1. Handle Custom Goal Modal Trigger
+        if (selectedValue === 'custom_goal_modal') {
+            const modal = new ModalBuilder()
+                .setCustomId('invite_modal_goal')
+                .setTitle('Set Invite Goal');
+
+            const goalInput = new TextInputBuilder()
+                .setCustomId('goal_input')
+                .setLabel('Required Invites (Number only)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(String(config.goal))
+                .setRequired(true);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(goalInput));
+            return await interaction.showModal(modal);
+        }
+
+        // 2. Handle Custom Reward Description Modal Trigger
+        if (selectedValue === 'custom_reward_modal') {
+            const modal = new ModalBuilder()
+                .setCustomId('invite_modal_reward')
+                .setTitle('Set Reward Description');
+
+            const rewardInput = new TextInputBuilder()
+                .setCustomId('reward_input')
+                .setLabel('Reward description shown on panel')
+                .setStyle(TextInputStyle.Paragraph)
+                .setValue(config.rewardName)
+                .setRequired(true);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(rewardInput));
+            return await interaction.showModal(modal);
+        }
+
+        if (selectedValue === 'set_alert_channel') {
             config.alertChannelId = interaction.channelId;
         } else if (selectedValue === 'toggle_color') {
             config.color = config.color === '#5865F2' ? '#57F287' : '#5865F2';
         } else if (selectedValue === 'test_reward_delivery') {
-            // Test sending a simulated reward DM to the administrator running the test
             try {
                 const testEmbed = new EmbedBuilder()
                     .setColor(0x57F287)
-                    .setTitle('🧪 __Test Reward Delivery__')
+                    .setTitle('🧪 __Test Reward Delivery Simulation__')
                     .setDescription(
-                        '> This is a simulation test for your invite reward system.\n\n' +
-                        'Here is your test access key:\n' +
-                        '```css\nTEST-KEY-EMPIRE-2026-9999\n```\n' +
-                        'Everything is wired up and working smoothly!'
+                        '> This is a test simulation for your invite reward system.\n\n' +
+                        `• **Reward Package:** \`${config.rewardName}\`\n` +
+                        '• **Test Key:**\n```css\nEMPIRE-TEST-KEY-2026-SUCCESS\n```\n' +
+                        'Your reward delivery pipeline is fully functional!'
                     )
                     .setTimestamp();
 
                 await interaction.user.send({ embeds: [testEmbed] });
                 return await interaction.reply({ 
-                    content: '✅ **Test Successful!** A simulated reward message has been sent directly to your DMs.', 
+                    content: '✅ **Test Successful!** A simulated reward delivery has been sent to your DMs.', 
                     ephemeral: true 
                 });
             } catch (err) {
@@ -57,6 +91,7 @@ export const inviteConfigSelectHandler = {
             .setDescription(
                 '> Settings updated successfully! ✨\n\n' +
                 '• **Target Goal:** `✨ ' + config.goal + ' successful invites`\n' +
+                '• **Configured Reward:** `' + config.rewardName + '`\n' +
                 '• **Embed Theme Color:** `' + config.color + '`\n' +
                 '• **Staff Channel:** ' + (config.alertChannelId ? `<#${config.alertChannelId}>` : '`Not Set`')
             )

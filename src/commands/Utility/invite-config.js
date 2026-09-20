@@ -4,7 +4,7 @@ import { getFromDb } from '../../utils/database.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('invite-config')
-        .setDescription('Configure invite reward goals, embed colors, and test reward delivery')
+        .setDescription('Configure invite reward goals, custom rewards, and test delivery')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
@@ -17,7 +17,12 @@ export default {
 
         const guildId = interaction.guild.id;
         const configKey = `invite_config_${guildId}`;
-        let config = await getFromDb(configKey, { goal: 10, color: '#5865F2', alertChannelId: '' });
+        let config = await getFromDb(configKey, { 
+            goal: 10, 
+            color: '#5865F2', 
+            rewardName: '3-Day Access Key & 30% Off Discount',
+            alertChannelId: '' 
+        });
 
         const embed = new EmbedBuilder()
             .setColor(config.color)
@@ -25,6 +30,7 @@ export default {
             .setDescription(
                 '> Manage and customize your server’s automated invite tracking parameters.\n\n' +
                 '• **Target Goal:** `✨ ' + config.goal + ' successful invites`\n' +
+                '• **Configured Reward:** `' + config.rewardName + '`\n' +
                 '• **Embed Theme Color:** `' + config.color + '`\n' +
                 '• **Staff Alert Channel:** ' + (config.alertChannelId ? `<#${config.alertChannelId}>` : '`Not Set (Defaulting to Owner DM)`') + '\n\n' +
                 '---'
@@ -37,11 +43,11 @@ export default {
                 .setCustomId('invite_config_select')
                 .setPlaceholder('🛠️ Select a configuration or test action...')
                 .addOptions([
-                    { label: 'Set Goal to 10 Invites', description: 'Requires users to secure 10 invites', value: 'set_goal_10', emoji: '🎯' },
-                    { label: 'Set Goal to 5 Invites', description: 'Requires users to secure 5 invites', value: 'set_goal_5', emoji: '🎯' },
+                    { label: 'Set Custom Invite Goal', description: 'Open a prompt to set any invite number', value: 'custom_goal_modal', emoji: '🎯' },
+                    { label: 'Set Custom Reward Description', description: 'Change what reward users receive', value: 'custom_reward_modal', emoji: '🎁' },
                     { label: 'Set Alert Channel to Current Channel', description: 'Routes staff fulfillment alerts here', value: 'set_alert_channel', emoji: '📢' },
                     { label: 'Toggle Theme Color (Purple/Green)', description: 'Switch dashboard aesthetic style', value: 'toggle_color', emoji: '🎨' },
-                    { label: '🧪 Test Reward Delivery (DM Me)', description: 'Sends a simulated test reward key to your DMs', value: 'test_reward_delivery', emoji: '🎁' }
+                    { label: '🧪 Test Reward Delivery (DM Me)', description: 'Sends a simulated test reward key to your DMs', value: 'test_reward_delivery', emoji: '🚀' }
                 ])
         );
 
