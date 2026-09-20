@@ -77,8 +77,32 @@ export async function handleInviteButton(interaction) {
 
     if (customId === 'invite_get_link' || customId.startsWith('invite_get_link')) {
         try {
+            const client = interaction.client;
             let inviteUrl = userData.inviteUrl;
             let relocatedNotice = '';
+
+            if (inviteUrl && userData.inviteCode) {
+                // We have a link on file, but Discord invites die permanently if their
+                // channel gets deleted or the invite is explicitly revoked — a stale
+                // DB record would otherwise keep re-serving a dead link forever. Verify
+                // it's actually still live before trusting it.
+                const liveInvites = await interaction.guild.invites.fetch().catch(err => {
+                    logger.error(`[Invite] Could not verify stored invite ${userData.inviteCode} for user ${userId} in guild ${guildId}:`, err);
+                    return null;
+                });
+
+                if (liveInvites) {
+                    client.invites = client.invites || new Map();
+                    client.invites.set(guildId, liveInvites);
+
+                    if (!liveInvites.has(userData.inviteCode)) {
+                        logger.warn(`[Invite] Stored invite ${userData.inviteCode} for user ${userId} in guild ${guildId} no longer exists on Discord — issuing a replacement.`);
+                        inviteUrl = '';
+                        userData.inviteCode = '';
+                        userData.inviteUrl = '';
+                    }
+                }
+            }
 
             if (!inviteUrl || !userData.inviteCode) {
                 // Create a brand-new, unique invite link for THIS specific user only.
@@ -111,7 +135,6 @@ export async function handleInviteButton(interaction) {
 
                     // Seed the bot's invite cache immediately so the very first use
                     // of this brand-new code isn't invisible to the next diff check
-                    const client = interaction.client;
                     client.invites = client.invites || new Map();
                     let guildCache = client.invites.get(guildId);
                     if (!guildCache) {

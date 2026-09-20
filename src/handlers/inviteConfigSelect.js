@@ -1,5 +1,6 @@
-import { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getFromDb, setInDb } from '../utils/database.js';
+import { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { getFromDb, setInDb, deleteFromDb } from '../utils/database.js';
+import { logger } from '../utils/logger.js';
 
 export const inviteConfigSelectHandler = {
     name: 'invite_config_select',
@@ -92,11 +93,70 @@ export const inviteConfigSelectHandler = {
                     ephemeral: true 
                 });
             } catch (err) {
-                return await interaction.reply({ 
-                    content: '❌ **Simulation Failed:** Make sure your DMs are open so the bot can message you.', 
-                    ephemeral: true 
+                return await interaction.reply({
+                    content: '❌ **Simulation Failed:** Make sure your DMs are open so the bot can message you.',
+                    ephemeral: true
                 });
             }
+        }
+
+        if (selectedValue === 'reset_all_progress') {
+            const confirmRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('invcfg_reset_confirm').setLabel("Yes, wipe everyone's progress").setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('invcfg_reset_cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+            );
+
+            await interaction.reply({
+                content:
+                    "⚠️ **This will permanently erase EVERY member's invite progress, locked reward choice, and personal invite link for this server.**\n" +
+                    'Everyone will need to click **Get Invite Link** again and re-pick a reward from scratch. This cannot be undone.\n\n' +
+                    'Are you sure?',
+                components: [confirmRow],
+                ephemeral: true
+            });
+
+            const collector = interaction.channel.createMessageComponentCollector({
+                filter: i => i.user.id === interaction.user.id && ['invcfg_reset_confirm', 'invcfg_reset_cancel'].includes(i.customId),
+                time: 30_000,
+                max: 1
+            });
+
+            collector.on('collect', async btnInteraction => {
+                if (btnInteraction.customId === 'invcfg_reset_cancel') {
+                    return await btnInteraction.update({ content: '❌ Cancelled. No data was changed.', components: [] });
+                }
+
+                await btnInteraction.update({ content: '⏳ Wiping all invite progress for this server...', components: [] });
+
+                try {
+                    const userKeys = await client.db.list(`invite_user_${guildId}_`);
+                    const ownerKeys = await client.db.list(`invite_owner_${guildId}_`);
+                    const allKeys = [...new Set([...(userKeys || []), ...(ownerKeys || [])])];
+
+                    let deleted = 0;
+                    for (const key of allKeys) {
+                        if (await deleteFromDb(key)) deleted += 1;
+                    }
+
+                    logger.warn(`[Invite] ${interaction.user.tag} (${interaction.user.id}) wiped all invite progress in guild ${guildId} — ${userKeys?.length || 0} member record(s), ${ownerKeys?.length || 0} link record(s).`);
+
+                    await btnInteraction.editReply({
+                        content:
+                            `✅ **Done.** Cleared ${userKeys?.length || 0} member record(s) and ${ownerKeys?.length || 0} invite-link record(s) (${deleted}/${allKeys.length} keys deleted).\n` +
+                            'Everyone gets a fresh link and can re-pick their reward next time they click **Get Invite Link**.',
+                        components: []
+                    });
+                } catch (error) {
+                    logger.error(`[Invite] Failed to wipe invite progress for guild ${guildId}:`, error);
+                    await btnInteraction.editReply({ content: '❌ Something went wrong while wiping the data — check the logs.', components: [] }).catch(() => {});
+                }
+            });
+
+            collector.on('end', collected => {
+                if (collected.size === 0) {
+                    interaction.editReply({ content: '⏱️ Confirmation timed out. No data was changed.', components: [] }).catch(() => {});
+                }
+            });
         }
     }
 };

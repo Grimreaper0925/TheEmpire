@@ -48,7 +48,8 @@ export default {
                     { label: 'Set Custom Reward Description', description: 'Change reward details text', value: 'custom_reward_modal', emoji: '🎁' },
                     { label: 'Set Alert Channel to Current Channel', description: 'Routes fulfillment alerts here', value: 'set_alert_channel', emoji: '📢' },
                     { label: 'Set Staff Role ID to Tag', description: 'Configure role notified on completion', value: 'custom_role_modal', emoji: '🛡️' },
-                    { label: '🧪 Test Staff Alert & Reward Delivery', description: 'Simulates a user hitting the goal & DMs you', value: 'test_full_workflow', emoji: '🚀' }
+                    { label: '🧪 Test Staff Alert & Reward Delivery', description: 'Simulates a user hitting the goal & DMs you', value: 'test_full_workflow', emoji: '🚀' },
+                    { label: "Reset Everyone's Invite Progress", description: 'DANGER: wipes all links, reward picks & progress', value: 'reset_all_progress', emoji: '⚠️' }
                 ])
         );
 
