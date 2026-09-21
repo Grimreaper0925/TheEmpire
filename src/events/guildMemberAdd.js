@@ -38,7 +38,7 @@ async function trackInviteJoin(member, client) {
         dmText: 'Congratulations! Your invite goal has been verified.\n\n• **Selected Reward:** `{reward}`\n\nYour fulfillment ticket has been transmitted to server administration. Please allow up to **24 hours** for manual key distribution right here via DM.'
     });
 
-    // Fetch current invites and compare with cached invites to find which link was used
+    // Fetch current invites and compare with cached invites to find which link(s) were used
     const cachedInvites = client.invites?.get(guildId);
     const newInvites = await guild.invites.fetch().catch(err => {
         logger.error(`[Invite] Failed to fetch invites for guild ${guildId} (needs Manage Server permission) — invite-reward tracking is silently broken for this join:`, err);
@@ -47,35 +47,65 @@ async function trackInviteJoin(member, client) {
 
     if (!newInvites) return;
 
-    // Update cache for next time
+    // No baseline yet for this guild (fresh boot, or ready.js's startup seed
+    // hasn't run/failed for it). We can't tell old uses from new ones, so just
+    // record the current snapshot as the baseline and skip crediting — the
+    // alternative (treating every existing use as "brand new") would dump a
+    // server's ENTIRE historical invite count onto whoever joins first.
+    if (!cachedInvites) {
+        logger.warn(`[Invite] No cached invite baseline yet for guild ${guildId} — seeding from ${member.user.tag}'s join without crediting anyone (expected right after a restart).`);
+        client.invites = client.invites || new Map();
+        client.invites.set(guildId, newInvites);
+        return;
+    }
+
+    // Diff every invite against the cached baseline rather than stopping at the
+    // first one that changed. A flat "+1 to whoever's link changed" silently
+    // undercounts whenever more than one join lands in the same fetch window —
+    // e.g. several friends clicking the same link within moments of each other,
+    // or several joins queued up behind this guild's processing lock. Each
+    // invite's own use-count delta tells us exactly how many real joins it
+    // picked up since the last check, however many that is.
+    let anyDeltaFound = false;
+
+    for (const inv of newInvites.values()) {
+        const cachedInv = cachedInvites.get(inv.code);
+        const previousUses = cachedInv ? cachedInv.uses : 0;
+        const delta = inv.uses - previousUses;
+        if (delta <= 0) continue;
+
+        anyDeltaFound = true;
+
+        // IMPORTANT: never trust inv.inviter here — bot-created invites always
+        // attribute to the bot itself, not the user the link was made for.
+        const ownerId = await getFromDb(`invite_owner_${guildId}_${inv.code}`, null);
+        if (!ownerId) {
+            logger.warn(`[Invite] Detected ${delta} new use(s) of invite ${inv.code} in guild ${guildId} (uses now ${inv.uses}), but no invite_owner_${guildId}_${inv.code} record exists — not tracked as a personal link.`);
+            continue;
+        }
+
+        // Prevent self-invites: if this exact join is the owner's own and the
+        // invite only picked up one use, that use is this join — don't credit it.
+        // (With delta > 1 we can't tell whose join was whose, so let the batch
+        // through rather than risk swallowing real friends' invites too.)
+        if (ownerId === member.id && delta === 1) continue;
+
+        await creditInviteOwner(guild, client, config, ownerId, delta);
+    }
+
+    if (!anyDeltaFound) {
+        const snapshot = newInvites.map(inv => `${inv.code}:${inv.uses}(cached:${cachedInvites.get(inv.code)?.uses ?? 'none'})`).join(', ');
+        logger.warn(`[Invite] No invite use-count increase detected for ${member.user.tag}'s join in guild ${guildId} — likely already credited by another join processed just before this one, or joined via an untracked method (vanity URL, server discovery). Live invites: [${snapshot}]`);
+    }
+
     client.invites = client.invites || new Map();
     client.invites.set(guildId, newInvites);
+}
 
-    // Find the invite whose use count went up. If we have no cached baseline
-    // for a code (e.g. it was just created seconds ago), treat any use > 0 as "just happened".
-    let usedInvite = newInvites.find(inv => {
-        const cachedInv = cachedInvites?.get(inv.code);
-        if (cachedInv) return inv.uses > cachedInv.uses;
-        return inv.uses > 0;
-    }) || null;
-
-    if (!usedInvite) {
-        const snapshot = newInvites.map(inv => `${inv.code}:${inv.uses}(cached:${cachedInvites?.get(inv.code)?.uses ?? 'none'})`).join(', ');
-        logger.warn(`[Invite] Could not identify which invite ${member.user.tag} used to join guild ${guildId}. Cached invites: ${cachedInvites?.size ?? 0}, live invites: ${newInvites.size}. Snapshot: [${snapshot}]`);
-        return;
-    }
-
-    // IMPORTANT: never trust usedInvite.inviter here — bot-created invites
-    // always attribute to the bot itself, not the user the link was made for.
-    // Look up the real owner from our own database instead.
-    const ownerId = await getFromDb(`invite_owner_${guildId}_${usedInvite.code}`, null);
-
-    if (!ownerId) {
-        logger.warn(`[Invite] ${member.user.tag} joined guild ${guildId} via invite ${usedInvite.code} (uses now ${usedInvite.uses}), but no invite_owner_${guildId}_${usedInvite.code} record exists — not tracked as a personal link.`);
-        return;
-    }
-    if (ownerId === member.id) return; // Prevent self-invites
-
+// Exported so /invite-resync can reuse the exact same threshold/DM/alert logic
+// when correcting historical undercounts from Discord's live invite numbers.
+export async function creditInviteOwner(guild, client, config, ownerId, amount) {
+    const guildId = guild.id;
     const userKey = `invite_user_${guildId}_${ownerId}`;
     let userData = await getFromDb(userKey, {
         uses: 0,
@@ -83,7 +113,7 @@ async function trackInviteJoin(member, client) {
         rewardClaimed: false
     });
 
-    userData.uses += 1;
+    userData.uses += amount;
     const targetGoal = config.goal || 10;
     const activeReward = userData.rewardChoice || config.rewardName;
 
