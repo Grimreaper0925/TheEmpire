@@ -12,6 +12,8 @@ import { isCommandEnabled } from '../services/commandAccessService.js';
 
 import { getVerifyConfig } from '../services/verificationService.js';
 import { logModerationAction } from '../utils/moderation.js';
+import { isTicketChannel, noteTicketMessage } from '../services/ticketSystem.js';
+import { handleAutomod } from '../services/automodService.js';
 import { describeUser } from '../utils/modActions.js';
 
 
@@ -22,6 +24,14 @@ export default {
       if (message.author.bot || !message.guild) return;
 
       logger.debug(`Message received from ${message.author.tag}: ${message.content}`);
+
+      if (isTicketChannel(message.channel.id)) {
+        await noteTicketMessage(message).catch((error) => logger.warn('Ticket activity update failed', { error: error.message }));
+      }
+
+      if (await handleAutomod(message).catch((error) => { logger.warn('Automod failed', { error: error.message }); return false; })) {
+        return;
+      }
 
       const blocked = await handleLinkGuard(message);
       if (blocked) {

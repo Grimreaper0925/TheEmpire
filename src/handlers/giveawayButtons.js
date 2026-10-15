@@ -52,6 +52,16 @@ export const giveawayJoinHandler = {
                 const participants = giveaway.participants || [];
                 const userId = interaction.user.id;
 
+                if (giveaway.requiredRoleId && !interaction.member.roles.cache.has(giveaway.requiredRoleId)) {
+                    return interaction.reply({ content: `You need the <@&${giveaway.requiredRoleId}> role to enter this giveaway.`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+                }
+                if (giveaway.minServerDays > 0) {
+                    const days = (Date.now() - (interaction.member.joinedTimestamp || Date.now())) / 86400000;
+                    if (days < giveaway.minServerDays) {
+                        return interaction.reply({ content: `You need to have been in this server for ${giveaway.minServerDays} days to enter. Come back in ${Math.ceil(giveaway.minServerDays - days)} day(s).`, flags: MessageFlags.Ephemeral });
+                    }
+                }
+
                 if (participants.includes(userId)) {
                     return replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'You have already entered this giveaway! 🎉' });
                 }

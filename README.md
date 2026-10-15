@@ -27,26 +27,32 @@ TitanBot offers a complete suite of tools for Discord server management and comm
 ### Verification & Safety
 - **Human Verification** - Verify button with a quick question, then a role
 - **Link Guard** - Unverified members can't post links or invites
-- **Welcome Greeting** - New members are pointed to the verify channel
-
-### AI Helper
-- **Store Aware** - Knows the store link and current promo code
+- **Auto-mod** - `/automod` anti-spam, repeat and mass-mention protection
+- **Raid Protection** - Auto raid mode removes new accounts and pauses invites
+- **Warnings** - `/warn`, `/warnings` with automatic timeout or kick
 
 ### Admin Tools
 - **Moderation** - `/kick`, `/ban`, `/timeout`, `/purge`, `/slowmode`, `/lockdown`, `/cases`
-- **Announcements** - `/announce` with role pings and images
+- **Server Builder** - `/aisetup` builds 9 ready-made layouts or your own, with rules, verify, ticket and role panels, and an undo
+- **Posts** - `/announce`, `/say` and `/embed` (edit later with the message ID)
 - **Server Pulse** - `/pulse` health check for admins
-- **Store Settings** - `/storeconfig` for the link and promo code
+
+### Store
+- **Sales** - `/sale` saves the promo and posts the announcement, `/restock` posts a product card
+- **Vouches** - `/vouch` with star ratings and a store average, `/vouches`
+- **Store Settings** - `/storeconfig`, and `/store` for members
 
 </td>
 <td width="50%" valign="top">
 
 ### Community
-- **Tickets** - Claim, priority, limits and transcripts
-- **Giveaways** - Create, end and reroll
+- **Tickets** - Topic menu, forms, private channels, claim, priority, HTML transcripts, ratings, auto-close and `/ticket stats`
+- **Self Roles** - Pick ping roles and a name color with `/selfroles`
+- **Giveaways** - Create, end and reroll, with role and time-in-server requirements
 
 ### Fun
-- **Polls, Dice, 8-Ball, Rock Paper Scissors, Coin Flip, Choose**
+- **Games** - `/trivia`, `/guess`, `/hangman`, `/wouldyourather`
+- **Quick** - Polls, dice, 8-ball, rock paper scissors, coin flip, choose
 
 ### Utility
 - **Store** - `/store` shows the shop link and current deal

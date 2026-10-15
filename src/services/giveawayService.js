@@ -148,6 +148,11 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
                 { name: '👥 Entries', value: giveaway.participants?.length?.toString() || '0', inline: true }
             );
 
+        const requirements = [];
+        if (giveaway.requiredRoleId) requirements.push(`Must have <@&${giveaway.requiredRoleId}>`);
+        if (giveaway.minServerDays > 0) requirements.push(`In the server for ${giveaway.minServerDays}+ days`);
+        if (requirements.length) embed.addFields({ name: '📋 Requirements', value: requirements.join('\n'), inline: false });
+
         if (isEnded) {
             const winnerDisplay = winners.length > 0 
                 ? winners.map(id => `<@${id}>`).join(', ')

@@ -74,8 +74,9 @@ function overwritesFor(channel, ctx) {
   return list;
 }
 
-export async function buildServer(guild, templateKey, { style = 'emoji', onProgress } = {}) {
-  const template = TEMPLATES[templateKey];
+export async function buildServer(guild, templateOrKey, { style = 'emoji', onProgress } = {}) {
+  const template = typeof templateOrKey === 'string' ? TEMPLATES[templateOrKey] : templateOrKey;
+  const templateKey = typeof templateOrKey === 'string' ? templateOrKey : 'custom';
   const totals = countTemplate(template);
   const created = { roles: [], categories: [], channels: [] };
   const reused = { roles: 0, categories: 0, channels: 0 };
@@ -88,6 +89,8 @@ export async function buildServer(guild, templateKey, { style = 'emoji', onProgr
     const canAnnounce = guild.features.includes('COMMUNITY');
     const ids = { botId: me.id, everyoneId: guild.roles.everyone.id };
     const roleByKey = {};
+  const channelsByName = new Map(); // normalized spec name -> channel (created or reused)
+  let ticketCategory = null;
 
     // Roles
     await note(`Creating roles (0/${totals.roles})...`);
@@ -133,6 +136,7 @@ export async function buildServer(guild, templateKey, { style = 'emoji', onProgr
         const existing = guild.channels.cache.find((c) => sameKind(c) && norm(c.name) === norm(spec.name));
         if (existing) {
           reused.channels++;
+          channelsByName.set(norm(spec.name), existing);
           continue;
         }
         let type = ChannelType.GuildText;
@@ -148,17 +152,42 @@ export async function buildServer(guild, templateKey, { style = 'emoji', onProgr
           reason: '/aisetup server build',
         });
         created.channels.push(channel.id);
+        channelsByName.set(norm(spec.name), channel);
         if (done % 4 === 0) await note(`Creating channels (${done}/${totals.channels})...`);
       }
     }
 
-  return { created, reused, verifiedRole: roleByKey.verified || null };
+  if (template.ticketCategory) {
+      const spec = template.ticketCategory;
+      ticketCategory = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && norm(c.name) === norm(spec.name));
+      if (!ticketCategory) {
+        ticketCategory = await guild.channels.create({
+          name: categoryName(spec, style),
+          type: ChannelType.GuildCategory,
+          permissionOverwrites: [
+            { id: ids.everyoneId, deny: [P.ViewChannel] },
+            { id: ids.staffId, allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory] },
+            { id: ids.botId, allow: [P.ViewChannel, P.SendMessages, P.ManageChannels] },
+          ],
+          reason: '/aisetup server build',
+        });
+        created.categories.push(ticketCategory.id);
+      }
+    }
+    const createdIds = new Set([...created.channels, ...created.categories]);
+    return { created, reused, createdIds, channelsByName, roles: roleByKey, ticketCategory, verifiedRole: roleByKey.verified || null };
   } finally {
     // Save what was made even if the build stops partway, so /aisetup undo can still clean it up.
     const previous = await getLastBuild(guild.id);
     const merge = (key) => [...(previous?.[key] || []), ...created[key]];
     await setInDb(recordKey(guild.id), { at: new Date().toISOString(), template: templateKey, roles: merge('roles'), categories: merge('categories'), channels: merge('channels') });
   }
+}
+
+// Lets other steps (like the self-role panel) register roles they made so /aisetup undo removes them too.
+export async function addToLastBuild(guildId, { roles = [] } = {}) {
+  const record = (await getFromDb(recordKey(guildId), null)) || {};
+  await setInDb(recordKey(guildId), { ...record, roles: [...(record.roles || []), ...roles] });
 }
 
 export async function getLastBuild(guildId) {

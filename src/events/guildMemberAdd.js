@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { getVerifyConfig } from '../services/verificationService.js';
+import { handleRaidJoin } from '../services/automodService.js';
 
 async function sendWelcomeGreeting(member) {
     try {
@@ -27,6 +28,9 @@ export default {
     async execute(member, client) {
         // 1. Block bots immediately
         if (member.user.bot) return;
+
+        // Raid protection can remove the member before we greet them.
+        if (await handleRaidJoin(member).catch((error) => { logger.warn('Raid check failed', { error: error.message }); return false; })) return;
 
         // Greet the new member and point them to verification.
         await sendWelcomeGreeting(member);

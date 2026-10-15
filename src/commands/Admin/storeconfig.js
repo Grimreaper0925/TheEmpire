@@ -1,5 +1,5 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
-import { getStoreConfig, saveStoreConfig, describePromo } from '../../services/storeService.js';
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags, ChannelType } from 'discord.js';
+import { getStoreConfig, saveStoreConfig, describePromo, endOfPacificDay } from '../../services/storeService.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -12,7 +12,10 @@ export default {
     .addIntegerOption((o) => o.setName('percent').setDescription('Percent off').setMinValue(1).setMaxValue(100))
     .addStringOption((o) =>
       o.setName('ends').setDescription('End date like 2026-12-31, or "never"').setMaxLength(30)
-    ),
+    )
+    .addChannelOption((o) => o.setName('vouch_channel').setDescription('Where /vouch posts go').addChannelTypes(ChannelType.GuildText))
+    .addChannelOption((o) => o.setName('sales_channel').setDescription('Default channel for /sale posts').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+    .addChannelOption((o) => o.setName('restock_channel').setDescription('Default channel for /restock posts').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -42,6 +45,13 @@ export default {
       }
     }
 
+    const vouch = interaction.options.getChannel('vouch_channel');
+    const sales = interaction.options.getChannel('sales_channel');
+    const restock = interaction.options.getChannel('restock_channel');
+    if (vouch) config.vouchChannelId = vouch.id;
+    if (sales) config.salesChannelId = sales.id;
+    if (restock) config.restockChannelId = restock.id;
+
     await saveStoreConfig(interaction.guildId, config);
 
     const promo = describePromo(config);
@@ -51,27 +61,3 @@ export default {
     );
   },
 };
-
-// 23:59:59 on the given calendar day in US Pacific time, as a Date (handles daylight saving).
-function endOfPacificDay(y, m, d) {
-  const base = Date.UTC(y, m - 1, d, 23, 59, 59);
-  if (new Date(base).getUTCMonth() !== m - 1) return null;
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  for (const offsetHours of [7, 8]) {
-    const candidate = new Date(base + offsetHours * 3600 * 1000);
-    const parts = Object.fromEntries(fmt.formatToParts(candidate).map((p) => [p.type, p.value]));
-    if (Number(parts.day) === d && Number(parts.month) === m && Number(parts.hour) % 24 === 23 && parts.minute === '59') {
-      return candidate;
-    }
-  }
-  return null;
-}

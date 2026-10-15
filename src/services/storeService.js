@@ -7,6 +7,9 @@ const DEFAULTS = {
   promoPercent: 30,
   // ISO timestamp, or null for no end date.
   promoEndsAt: '2026-11-01T06:59:59Z',
+  vouchChannelId: null,
+  salesChannelId: null,
+  restockChannelId: null,
 };
 
 export async function getStoreConfig(guildId) {
@@ -31,4 +34,28 @@ export function describePromo(config) {
     ? ` until ${new Date(config.promoEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'America/Los_Angeles' })} (Pacific time)`
     : '';
   return `code ${config.promoCode} gives ${config.promoPercent}% off${ends}`;
+}
+
+// 23:59:59 on the given calendar day in US Pacific time, as a Date (handles daylight saving).
+export function endOfPacificDay(y, m, d) {
+  const base = Date.UTC(y, m - 1, d, 23, 59, 59);
+  if (new Date(base).getUTCMonth() !== m - 1) return null;
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  for (const offsetHours of [7, 8]) {
+    const candidate = new Date(base + offsetHours * 3600 * 1000);
+    const parts = Object.fromEntries(fmt.formatToParts(candidate).map((p) => [p.type, p.value]));
+    if (Number(parts.day) === d && Number(parts.month) === m && Number(parts.hour) % 24 === 23 && parts.minute === '59') {
+      return candidate;
+    }
+  }
+  return null;
 }

@@ -51,6 +51,15 @@ export default {
                 .addChannelTypes(ChannelType.GuildText)
                 .setRequired(false),
         )
+        .addRoleOption((option) =>
+            option.setName("required_role").setDescription("Only members with this role can enter.").setRequired(false),
+        )
+        .addIntegerOption((option) =>
+            option.setName("min_server_days").setDescription("Members must have been in the server this many days.").setMinValue(1).setMaxValue(365).setRequired(false),
+        )
+        .addRoleOption((option) =>
+            option.setName("ping").setDescription("Role to ping when the giveaway starts (like Giveaway Ping).").setRequired(false),
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
@@ -107,6 +116,8 @@ export default {
             endsAt: endTime,
             winnerCount: winnerCount,
             participants: [],
+            requiredRoleId: interaction.options.getRole("required_role")?.id || null,
+            minServerDays: interaction.options.getInteger("min_server_days") || 0,
             isEnded: false,
             ended: false,
             createdAt: new Date().toISOString()
@@ -115,8 +126,10 @@ export default {
         const embed = createGiveawayEmbed(initialGiveawayData, "active");
         const row = createGiveawayButtons(false);
 
+        const pingRole = interaction.options.getRole("ping");
         const giveawayMessage = await targetChannel.send({
-            content: "🎉 **NEW GIVEAWAY** 🎉",
+            content: `🎉 **NEW GIVEAWAY** 🎉${pingRole ? ` ${pingRole}` : ''}`,
+            allowedMentions: pingRole ? { roles: [pingRole.id] } : { parse: [] },
             embeds: [embed],
             components: [row],
         });

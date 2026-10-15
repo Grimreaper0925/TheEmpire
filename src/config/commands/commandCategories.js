@@ -18,6 +18,7 @@ export const CATEGORY_ICONS = {
   Reaction_roles: '🎭',
   Search: '🔍',
   ServerStats: '📈',
+  Store: '🛒',
   Ticket: '🎫',
   Tools: '🛠️',
   Utility: '🔧',
