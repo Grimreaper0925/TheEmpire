@@ -41,7 +41,7 @@ export default {
     .addAttachmentOption((o) => o.setName('image').setDescription('Big banner image shown under the text'))
     .addStringOption((o) => o.setName('button_label').setDescription('Text on a link button, like "Shop now"').setMaxLength(80))
     .addStringOption((o) => o.setName('button_url').setDescription('Where the button goes (https://...)').setMaxLength(300))
-    .addStringOption((o) => o.setName('color').setDescription('Custom card color as hex, like #ff0000').setMaxLength(7)),
+    .addStringOption((o) => o.setName('color').setDescription('Card color: a name like red, or hex like #ff0000').setMaxLength(20)),
 
   async execute(interaction) {
     const channel = interaction.options.getChannel('channel', true);
@@ -69,7 +69,10 @@ export default {
     const colorInput = interaction.options.getString('color');
     const color = colorInput ? parseHexColor(colorInput) : null;
     if (colorInput && color === null) {
-      return interaction.reply({ content: 'Use a hex color like `#ff0000`.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({
+        content: 'I could not read that color. Use a name like `red`, `gold` or `purple`, or hex like `#ff0000`.',
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     const pingPart = everyone ? 'everyone' : role ? role.id : 'none';
@@ -94,7 +97,7 @@ export default {
         input('body', 'Message', TextInputStyle.Paragraph, {
           max: 1800,
           required: true,
-          placeholder: 'Discord text works: **bold**, __underline__, ~~strike~~, ||spoiler||, > quote, ## big heading. Lines starting with - become bullets.',
+          placeholder: 'Try **bold** __underline__ ~~strike~~ ||spoiler|| > quote ## heading. Use - for bullets.',
         }),
         input('points', 'Highlights (optional, one per line)', TextInputStyle.Paragraph, {
           max: 900,

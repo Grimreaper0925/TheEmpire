@@ -42,11 +42,30 @@ export function isHttpsUrl(value) {
   return typeof value === 'string' && /^https:\/\/[^\s]+$/i.test(value);
 }
 
-export function parseHexColor(value) {
-  const match = String(value || '').trim().match(/^#?([0-9a-f]{6})$/i);
-  return match ? parseInt(match[1], 16) : null;
-}
+const NAMED_COLORS = {
+  red: 0xed4245,
+  orange: 0xe67e22,
+  yellow: 0xf1c40f,
+  gold: 0xf1c40f,
+  green: 0x2ecc71,
+  teal: 0x1abc9c,
+  blue: 0x3498db,
+  purple: 0x9b59b6,
+  pink: 0xff69b4,
+  white: 0xffffff,
+  black: 0x111111,
+};
 
+/** Accepts "#ff0000", "ff0000", "f00" or a plain color name like "red". Returns null if it can't. */
+export function parseHexColor(value) {
+  const input = String(value || '').trim().toLowerCase();
+  if (NAMED_COLORS[input] !== undefined) return NAMED_COLORS[input];
+
+  const match = input.match(/^#?([0-9a-f]{6}|[0-9a-f]{3})$/);
+  if (!match) return null;
+  const hex = match[1].length === 3 ? match[1].split('').map((c) => c + c).join('') : match[1];
+  return parseInt(hex, 16);
+}
 
 function tidy(value) {
   return String(value || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
