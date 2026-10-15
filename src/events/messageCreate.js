@@ -1,6 +1,5 @@
 import { Events, PermissionFlagsBits } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { checkRateLimit } from '../utils/rateLimiter.js';
 import { parsePrefixCommand } from '../utils/prefixParser.js';
 import { supportsPrefixExecution, executePrefixCommand, resolvePrefixAccessKey } from '../utils/messageAdapter.js';
 import { resolveCommandAlias, resolveSubcommandAlias } from '../config/commands/commandAliases.js';
@@ -14,7 +13,6 @@ import { isCommandEnabled } from '../services/commandAccessService.js';
 import { getVerifyConfig } from '../services/verificationService.js';
 import { logModerationAction } from '../utils/moderation.js';
 import { describeUser } from '../utils/modActions.js';
-import { askConcierge, isAiConfigured } from '../services/aiConciergeService.js';
 
 
 export default {
@@ -27,11 +25,6 @@ export default {
 
       const blocked = await handleLinkGuard(message);
       if (blocked) {
-        return;
-      }
-
-      const aiHandled = await handleAiConcierge(message, client);
-      if (aiHandled) {
         return;
       }
 
@@ -84,55 +77,6 @@ async function handleLinkGuard(message) {
     return true;
   } catch (error) {
     logger.error('Error in link guard:', error);
-    return false;
-  }
-}
-
-async function handleAiConcierge(message, client) {
-  try {
-    if (!isAiConfigured()) return false;
-
-    const config = await getVerifyConfig(message.guild.id);
-    const inAiChannel = Boolean(config.aiChannelId) && message.channel.id === config.aiChannelId;
-    const mentionedMe = message.mentions.users.has(client.user.id) && !message.mentions.everyone;
-    if (!inAiChannel && !mentionedMe) return false;
-
-    const text = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!text) return false;
-
-    // Let normal prefix commands through in the AI channel.
-    const guildConfig = await getGuildConfig(client, message.guild.id);
-    const prefix = guildConfig?.prefix || getCommandPrefix();
-    if (prefix && text.startsWith(prefix)) return false;
-
-    const allowed = await checkRateLimit(`ai_concierge:${message.author.id}`, 5, 60000);
-    if (!allowed) {
-      await message.reply({ content: 'Slow down a little, then ask me again.', allowedMentions: { repliedUser: false } });
-      return true;
-    }
-
-    await message.channel.sendTyping().catch(() => {});
-
-    const reply = await askConcierge({
-      guildId: message.guild.id,
-      channelId: message.channel.id,
-      userId: message.author.id,
-      username: message.member?.displayName || message.author.username,
-      text,
-    });
-
-    if (!reply) {
-      await message.reply({
-        content: "I couldn't answer that right now. A staff member can help, or open a ticket.",
-        allowedMentions: { repliedUser: false },
-      });
-      return true;
-    }
-
-    await message.reply({ content: reply, allowedMentions: { parse: [], repliedUser: false } });
-    return true;
-  } catch (error) {
-    logger.error('Error in AI concierge:', error);
     return false;
   }
 }

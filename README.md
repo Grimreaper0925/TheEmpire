@@ -30,7 +30,6 @@ TitanBot offers a complete suite of tools for Discord server management and comm
 - **Welcome Greeting** - New members are pointed to the verify channel
 
 ### AI Helper
-- **Ask Anything** - Answers questions in a channel, on @mention, or with `/ask`
 - **Store Aware** - Knows the store link and current promo code
 
 ### Admin Tools
@@ -45,7 +44,6 @@ TitanBot offers a complete suite of tools for Discord server management and comm
 ### Community
 - **Tickets** - Claim, priority, limits and transcripts
 - **Giveaways** - Create, end and reroll
-- **Invite Tracking** - Invite goals with rewards
 - **Logging** - Audit log for moderation and server events
 
 ### Fun

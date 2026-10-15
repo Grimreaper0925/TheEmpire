@@ -7,21 +7,6 @@ export default {
     async execute(client) {
         logger.info(`Logged in as ${client.user.tag}!`);
 
-        // Seed the invite-uses baseline for every guild BEFORE any join can be
-        // processed. This must be awaited (not fire-and-forget) — guildMemberAdd's
-        // delta-based tracking treats a missing baseline as "first ever check" and
-        // skips crediting to avoid mistaking a guild's entire historical invite
-        // uses for a single new join right after a restart.
-        client.invites = client.invites || new Map();
-        for (const guild of client.guilds.cache.values()) {
-            try {
-                const firstInvites = await guild.invites.fetch();
-                client.invites.set(guild.id, firstInvites);
-            } catch (err) {
-                logger.warn(`[Invite] Could not seed invite cache for guild ${guild.id} on startup (likely missing Manage Server permission):`, err);
-            }
-        }
-
         setInterval(async () => {
             try {
                 for (const [guildId, guild] of client.guilds.cache) {

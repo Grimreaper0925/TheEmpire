@@ -33,12 +33,6 @@ export default {
         .setName('welcome_channel')
         .setDescription('Channel where new members get greeted')
         .addChannelTypes(ChannelType.GuildText)
-    )
-    .addChannelOption((o) =>
-      o
-        .setName('ai_channel')
-        .setDescription('Channel where the AI answers questions')
-        .addChannelTypes(ChannelType.GuildText)
     ),
 
   async execute(interaction) {
@@ -54,7 +48,6 @@ export default {
     const role = interaction.options.getRole('role', true);
     const verifyChannel = interaction.options.getChannel('verify_channel', true);
     const welcomeChannel = interaction.options.getChannel('welcome_channel');
-    const aiChannel = interaction.options.getChannel('ai_channel');
 
     const me = interaction.guild.members.me;
     if (role.managed || role.position >= me.roles.highest.position) {
@@ -67,7 +60,6 @@ export default {
     config.roleId = role.id;
     config.verifyChannelId = verifyChannel.id;
     if (welcomeChannel) config.welcomeChannelId = welcomeChannel.id;
-    if (aiChannel) config.aiChannelId = aiChannel.id;
     await saveVerifyConfig(interaction.guildId, config);
 
     const embed = createEmbed({
@@ -95,7 +87,6 @@ export default {
     const lines = [
       `Verification is live. Members who pass get **${role.name}**.`,
       welcomeChannel ? `New members are greeted in ${welcomeChannel}.` : null,
-      aiChannel ? `The AI answers in ${aiChannel} and whenever someone @mentions me.` : 'The AI answers when someone @mentions me.',
       'Tip: hide your other channels from @everyone and show them only to the verified role.',
     ].filter(Boolean);
 

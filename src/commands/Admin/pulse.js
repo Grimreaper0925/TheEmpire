@@ -43,7 +43,6 @@ export default {
         `**Joined last 24h / 7d:** ${joined24h} / ${joined7d}`,
         `**Accounts under 7 days old:** ${youngAccounts}`,
         `**Link guard:** ${config.linkGuard ? 'on' : 'off'}`,
-        `**AI helper:** ${process.env.ANTHROPIC_API_KEY ? (config.aiChannelId ? `on in <#${config.aiChannelId}>` : 'on when mentioned') : 'off (no API key)'}`,
         `**Promo:** ${promo ?? 'none active'}`,
       ].join('\n'),
     });

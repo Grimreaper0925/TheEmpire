@@ -18,7 +18,6 @@ import { resolveSlashAccessKey } from '../utils/messageAdapter.js';
 import { isCollectorManagedComponent } from '../utils/collectorComponents.js';
 import { ResponseCoordinator } from '../utils/responseCoordinator.js';
 import { enforceDefaultCommandPermissions } from '../utils/permissionGuard.js';
-import { handleInviteButton } from '../handlers/inviteButtons.js';
 
 const COMMAND_ERROR_SUBTYPES = {
     warn: 'warn_failed',
@@ -211,19 +210,6 @@ export default {
                         }
                     }
                 } else if (interaction.isButton()) {
-                    if (interaction.customId.startsWith('invite_')) {
-                        try {
-                            await handleInviteButton(interaction);
-                        } catch (error) {
-                            await handleInteractionError(interaction, error, withTraceContext({
-                                type: 'button',
-                                customId: interaction.customId,
-                                handler: 'invite'
-                            }, interactionTraceContext));
-                        }
-                        return;
-                    }
-
                     if (interaction.customId.startsWith('shared_todo_')) {
                         const parts = interaction.customId.split('_');
                         const buttonType = parts.slice(0, 3).join('_');
@@ -277,34 +263,6 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isStringSelectMenu()) {
-                    if (interaction.customId === 'invite_config_select') {
-                        try {
-                            const { inviteConfigSelectHandler } = await import('../handlers/inviteConfigSelect.js');
-                            await inviteConfigSelectHandler.execute(interaction, client);
-                        } catch (error) {
-                            await handleInteractionError(interaction, error, withTraceContext({
-                                type: 'select_menu',
-                                customId: interaction.customId,
-                                handler: 'invite_config'
-                            }, interactionTraceContext));
-                        }
-                        return;
-                    }
-
-                    if (interaction.customId === 'invite_choose_reward') {
-                        try {
-                            const { inviteRewardChoiceHandler } = await import('../handlers/inviteRewardChoice.js');
-                            await inviteRewardChoiceHandler.execute(interaction, client);
-                        } catch (error) {
-                            await handleInteractionError(interaction, error, withTraceContext({
-                                type: 'select_menu',
-                                customId: interaction.customId,
-                                handler: 'invite_reward_choice'
-                            }, interactionTraceContext));
-                        }
-                        return;
-                    }
-
                     const [customId, ...args] = interaction.customId.split(':');
                     const selectMenu = client.selectMenus.get(customId);
 
@@ -330,20 +288,6 @@ export default {
                         }, interactionTraceContext));
                     }
                 } else if (interaction.isModalSubmit()) {
-                    if (interaction.customId.startsWith('invite_modal_')) {
-                        try {
-                            const { inviteConfigModalHandler } = await import('../handlers/inviteConfigModals.js');
-                            await inviteConfigModalHandler.execute(interaction, client);
-                        } catch (error) {
-                            await handleInteractionError(interaction, error, withTraceContext({
-                                type: 'modal',
-                                customId: interaction.customId,
-                                handler: 'invite_modal'
-                            }, interactionTraceContext));
-                        }
-                        return;
-                    }
-
                     if (
                         interaction.customId.startsWith('app_review_')
                         || interaction.customId.startsWith('jtc_')

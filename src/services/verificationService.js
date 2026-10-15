@@ -18,7 +18,6 @@ export async function getVerifyConfig(guildId) {
     roleId: null,
     verifyChannelId: null,
     welcomeChannelId: null,
-    aiChannelId: null,
     verifiedCount: 0,
   });
 }
