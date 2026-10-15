@@ -44,7 +44,6 @@ TitanBot offers a complete suite of tools for Discord server management and comm
 ### Community
 - **Tickets** - Claim, priority, limits and transcripts
 - **Giveaways** - Create, end and reroll
-- **Logging** - Audit log for moderation and server events
 
 ### Fun
 - **Polls, Dice, 8-Ball, Rock Paper Scissors, Coin Flip, Choose**

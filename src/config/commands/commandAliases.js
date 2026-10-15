@@ -74,8 +74,6 @@ export const commandAliases = {
     't': 'ticket',
     'new': 'ticket',
 
-    'todo': 'todo',
-    'report': 'report',
     'userinfo': 'userinfo',
     'whois': 'userinfo',
     'ui': 'userinfo',

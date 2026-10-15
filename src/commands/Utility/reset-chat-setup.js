@@ -1,86 +1,67 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
-import { successEmbed } from '../../utils/embeds.js';
-import { setInDb } from '../../utils/database.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
+import {
+  getSlots,
+  saveSlots,
+  checkResettable,
+  formatInterval,
+  nextResetAt,
+  toUnix,
+  MIN_INTERVAL_MS,
+  MAX_INTERVAL_MS,
+  MAX_SLOTS,
+} from '../../services/chatResetService.js';
 
 export default {
-    data: new SlashCommandBuilder()
-        .setName("reset-chat-setup")
-        .setDescription("Configure automated channel resets")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-        .addChannelOption(option =>
-            option
-                .setName("channel")
-                .setDescription("The channel to automatically reset")
-                .addChannelTypes(ChannelType.GuildText)
-                .setRequired(true)
-        )
-        .addIntegerOption(option =>
-            option
-                .setName("hours")
-                .setDescription("Set reset interval in hours (optional)")
-                .setRequired(false)
-                .setMinValue(1)
-        )
-        .addIntegerOption(option =>
-            option
-                .setName("minutes")
-                .setDescription("Set reset interval in minutes (optional)")
-                .setRequired(false)
-                .setMinValue(1)
-        ),
-    category: "Utility",
+  data: new SlashCommandBuilder()
+    .setName('reset-chat-setup')
+    .setDescription('Make a channel wipe itself on a timer')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDMPermission(false)
+    .addChannelOption((o) =>
+      o
+        .setName('channel')
+        .setDescription('Channel to reset automatically')
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+        .setRequired(true)
+    )
+    .addIntegerOption((o) => o.setName('days').setDescription('Days between resets').setMinValue(1).setMaxValue(30))
+    .addIntegerOption((o) => o.setName('hours').setDescription('Hours between resets').setMinValue(1).setMaxValue(720))
+    .addIntegerOption((o) => o.setName('minutes').setDescription('Minutes between resets (5 or more)').setMinValue(1).setMaxValue(1000)),
+  category: 'Utility',
 
-    async execute(interaction, config, client) {
-        await interaction.deferReply({ ephemeral: true });
+  async execute(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        try {
-            const guildId = interaction.guildId;
-            const channel = interaction.options.getChannel('channel');
-            const hours = interaction.options.getInteger('hours');
-            const minutes = interaction.options.getInteger('minutes');
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+      return interaction.editReply('You need the **Manage Channels** permission to use this.');
+    }
 
-            if (!hours && !minutes) {
-                return await interaction.editReply({
-                    content: 'Please provide either a **hours** or **minutes** option!'
-                });
-            }
+    const channel = interaction.options.getChannel('channel', true);
+    const days = interaction.options.getInteger('days') || 0;
+    const hours = interaction.options.getInteger('hours') || 0;
+    const minutes = interaction.options.getInteger('minutes') || 0;
+    const intervalMs = ((days * 24 + hours) * 60 + minutes) * 60 * 1000;
 
-            let intervalMs = 0;
-            let timeString = '';
+    if (!intervalMs) return interaction.editReply('Pick how often to reset with `days`, `hours` or `minutes`. For example `hours: 24`.');
+    if (intervalMs < MIN_INTERVAL_MS) return interaction.editReply('The shortest allowed time is 5 minutes.');
+    if (intervalMs > MAX_INTERVAL_MS) return interaction.editReply('The longest allowed time is 30 days.');
 
-            if (hours) {
-                intervalMs += hours * 60 * 60 * 1000;
-                timeString += `${hours} hour(s) `;
-            }
-            if (minutes) {
-                intervalMs += minutes * 60 * 1000;
-                timeString += `${minutes} minute(s)`;
-            }
+    const problem = checkResettable(channel);
+    if (problem) return interaction.editReply(problem);
 
-            const settingsKey = `reset_chat_config_${guildId}`;
-            const settingsData = {
-                channelId: channel.id,
-                intervalMs: intervalMs,
-                displayTime: timeString.trim(),
-                lastReset: new Date().toISOString()
-            };
+    const slots = await getSlots(interaction.guildId);
+    const existing = slots.find((s) => s.channelId === channel.id);
+    if (!existing && slots.length >= MAX_SLOTS) {
+      return interaction.editReply(`You can have up to ${MAX_SLOTS} auto-reset channels. Remove one with \`/chat-reset disable\` first.`);
+    }
 
-            await setInDb(settingsKey, settingsData);
+    const slot = { channelId: channel.id, intervalMs, lastReset: new Date().toISOString() };
+    await saveSlots(interaction.guildId, existing ? slots.map((s) => (s.channelId === channel.id ? slot : s)) : [...slots, slot]);
 
-            return await interaction.editReply({
-                embeds: [
-                    successEmbed(
-                        "Chat Reset Configured",
-                        `Successfully set auto-reset for <#${channel.id}> every **${timeString.trim()}**!`
-                    )
-                ]
-            });
-
-        } catch (error) {
-            console.error('Failed to configure chat reset:', error);
-            return await interaction.editReply({ 
-                content: 'There was an error saving your configuration.' 
-            });
-        }
-    },
+    return interaction.editReply(
+      `${existing ? 'Updated' : 'Done'}: ${channel} will reset every **${formatInterval(intervalMs)}**.\n` +
+        `First reset <t:${toUnix(nextResetAt(slot))}:R>. Each reset deletes all messages and recreates the channel.\n` +
+        'See and manage everything with `/chat-reset dashboard`.'
+    );
+  },
 };

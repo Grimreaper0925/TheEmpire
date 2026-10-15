@@ -34,7 +34,6 @@ export const COMMAND_BLOCKED_SUBCOMMANDS = {
     '247',
   ]),
   birthday: new Set(['setchannel']),
-  report: new Set(['setchannel']),
 };
 
 function collectSubcommandNames(commandJson) {

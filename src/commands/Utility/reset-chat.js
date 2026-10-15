@@ -1,56 +1,76 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  ChannelType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  MessageFlags,
+} from 'discord.js';
 import { logger } from '../../utils/logger.js';
-import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
-import { InteractionHelper } from '../../utils/interactionHelper.js';
-import { getFromDb, setInDb } from '../../utils/database.js';
+import { checkResettable, resetChannel } from '../../services/chatResetService.js';
 
 export default {
-    data: new SlashCommandBuilder()
-        .setName("reset-chat")
-        .setDescription("Resets the channel by clearing all messages and starts a new period.")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
-    category: "Utility",
+  data: new SlashCommandBuilder()
+    .setName('reset-chat')
+    .setDescription('Wipe a channel clean right now (it is recreated empty)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDMPermission(false)
+    .addChannelOption((o) =>
+      o
+        .setName('channel')
+        .setDescription('Channel to reset (default: this one)')
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+    ),
+  category: 'Utility',
 
-    async execute(interaction, config, client) {
-        const deferSuccess = await InteractionHelper.safeDefer(interaction);
-        if (!deferSuccess) return;
+  async execute(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        try {
-            // Always target the exact channel the user is currently typing in
-            const channelToReset = interaction.channel;
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+      return interaction.editReply('You need the **Manage Channels** permission to use this.');
+    }
 
-            const newChannel = await channelToReset.clone({
-                reason: `Chat reset requested by ${interaction.user.tag}`,
-                position: channelToReset.position
-            });
+    const channel = interaction.options.getChannel('channel') || interaction.channel;
+    const problem = checkResettable(channel);
+    if (problem) return interaction.editReply(problem);
 
-            await channelToReset.delete(`Chat reset requested by ${interaction.user.tag}`);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('reset_go').setLabel('Reset it').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('reset_cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    );
+    const prompt = await interaction.editReply({
+      content:
+        `Reset ${channel}? This deletes **every message** in it and recreates the channel with the same name, topic and permissions.\n` +
+        'Pins, threads and webhooks in it are lost. This cannot be undone.',
+      components: [row],
+    });
 
-            await newChannel.send({
-                content: '🔄 **Chat Channel Reset!** A new period has started. Start chatting!'
-            });
+    let choice;
+    try {
+      choice = await prompt.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        filter: (i) => i.user.id === interaction.user.id,
+        time: 30000,
+      });
+    } catch {
+      return interaction.editReply({ content: 'No answer, so nothing was reset.', components: [] }).catch(() => {});
+    }
 
-            // If this channel was part of the multi-channel slots, update its ID in the database
-            const guildId = interaction.guildId;
-            const settingsKey = `reset_chat_configs_${guildId}`;
-            let configs = await getFromDb(settingsKey, []);
-            if (Array.isArray(configs)) {
-                const slot = configs.find(c => c.channelId === channelToReset.id);
-                if (slot) {
-                    slot.channelId = newChannel.id;
-                    slot.lastReset = new Date().toISOString();
-                    await setInDb(settingsKey, configs);
-                }
-            }
+    if (choice.customId === 'reset_cancel') {
+      return choice.update({ content: 'Cancelled. Nothing was reset.', components: [] });
+    }
 
-            logger.info(`[ManualReset] Channel #${channelToReset.name} reset via /reset-chat by ${interaction.user.tag}`);
-
-        } catch (error) {
-            console.error('Failed to reset channel:', error);
-            return await replyUserError(interaction, { 
-                type: ErrorTypes.UNKNOWN, 
-                message: 'There was an error trying to reset this channel.' 
-            });
-        }
-    },
+    await choice.update({ content: 'Resetting...', components: [] });
+    try {
+      const fresh = await resetChannel(channel, { reason: `Chat reset by ${interaction.user.tag}` });
+      logger.info(`[ManualReset] #${channel.name} reset by ${interaction.user.tag}`);
+      // If the reset channel is the one this command ran in, the old reply is gone; that is fine.
+      await interaction.editReply({ content: `Done. ${fresh} is fresh and empty.` }).catch(() => {});
+    } catch (error) {
+      logger.error('Manual chat reset failed', { error: error.message });
+      await interaction.editReply({ content: `I couldn't reset that channel: ${error.message}` }).catch(() => {});
+    }
+  },
 };

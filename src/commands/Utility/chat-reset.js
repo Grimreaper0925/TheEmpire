@@ -1,54 +1,148 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
-import { InteractionHelper } from '../../utils/interactionHelper.js';
-import { logger } from '../../utils/logger.js';
-import { handleInteractionError, TitanBotError, ErrorTypes, replyUserError } from '../../utils/errorHandler.js';
-import { setInDb } from '../../utils/database.js';
-import { successEmbed } from '../../utils/embeds.js';
-import chatResetDashboard from './modules/chat_reset_dashboard.js';
+import {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  ChannelType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  ComponentType,
+  EmbedBuilder,
+  MessageFlags,
+} from 'discord.js';
+import {
+  getSlots,
+  saveSlots,
+  resetChannel,
+  formatInterval,
+  nextResetAt,
+  toUnix,
+} from '../../services/chatResetService.js';
+
+async function renderDashboard(interaction, selectedId) {
+  const slots = await getSlots(interaction.guildId);
+  const selected = slots.find((s) => s.channelId === selectedId) || slots[0];
+
+  const embed = new EmbedBuilder().setTitle('Auto chat resets').setColor(0x5865f2);
+  if (!slots.length) {
+    embed.setDescription('No channels are set to reset automatically.\nUse `/reset-chat-setup` to add one.');
+    return { embeds: [embed], components: [] };
+  }
+
+  embed.setDescription(
+    slots
+      .map((s) => {
+        const marker = s.channelId === selected.channelId ? '▸ ' : '';
+        const warn = s.lastError ? `\n  Last attempt failed: ${s.lastError}` : '';
+        return `${marker}<#${s.channelId}> every **${formatInterval(s.intervalMs)}**, next reset <t:${toUnix(nextResetAt(s))}:R>${warn}`;
+      })
+      .join('\n')
+  );
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('cr_pick')
+    .setPlaceholder('Pick a channel to manage')
+    .addOptions(
+      slots.map((s) => ({
+        label: `#${interaction.guild.channels.cache.get(s.channelId)?.name || 'unknown'}`.slice(0, 100),
+        description: `Every ${formatInterval(s.intervalMs)}`,
+        value: s.channelId,
+        default: s.channelId === selected.channelId,
+      }))
+    );
+
+  const buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('cr_now').setLabel('Reset now').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('cr_remove').setLabel('Stop auto-reset').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('cr_refresh').setLabel('Refresh').setStyle(ButtonStyle.Primary)
+  );
+
+  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), buttons], selectedId: selected.channelId };
+}
 
 export default {
-    data: new SlashCommandBuilder()
-        .setName('chat-reset')
-        .setDescription('Manage automated chat reset configurations')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('dashboard')
-                .setDescription('Open the chat reset configuration dashboard'),
+  data: new SlashCommandBuilder()
+    .setName('chat-reset')
+    .setDescription('See and manage channels that reset automatically')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false)
+    .addSubcommand((s) => s.setName('dashboard').setDescription('Open the auto-reset dashboard'))
+    .addSubcommand((s) =>
+      s
+        .setName('disable')
+        .setDescription('Stop automatic resets')
+        .addChannelOption((o) =>
+          o
+            .setName('channel')
+            .setDescription('Only stop this channel (leave empty to stop all)')
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
         )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('disable')
-                .setDescription('Clear all automated chat reset slots'),
-        ),
+    ),
+  category: 'Utility',
 
-    async execute(interaction, config, client) {
-        try {
-            if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-                return await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'You need the **Manage Server** permission to use `/chat-reset`.' });
-            }
+  async execute(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-            const subcommand = interaction.options.getSubcommand();
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+      return interaction.editReply('You need the **Manage Server** permission to use this.');
+    }
 
-            if (subcommand === 'dashboard') {
-                return await chatResetDashboard.execute(interaction, config, client);
-            } else if (subcommand === 'disable') {
-                await InteractionHelper.safeDefer(interaction, { flags: MessageFlags.Ephemeral });
-                const guildId = interaction.guildId;
-                const settingsKey = `reset_chat_configs_${guildId}`; // Fixed to multi-channel key
+    if (interaction.options.getSubcommand() === 'disable') {
+      const channel = interaction.options.getChannel('channel');
+      const slots = await getSlots(interaction.guildId);
+      if (channel) {
+        if (!slots.some((s) => s.channelId === channel.id)) return interaction.editReply(`${channel} is not set to reset automatically.`);
+        await saveSlots(interaction.guildId, slots.filter((s) => s.channelId !== channel.id));
+        return interaction.editReply(`Stopped automatic resets for ${channel}.`);
+      }
+      await saveSlots(interaction.guildId, []);
+      return interaction.editReply(slots.length ? `Stopped automatic resets for all ${slots.length} channel(s).` : 'Nothing was set up.');
+    }
 
-                // Clear out the array completely
-                await setInDb(settingsKey, []);
+    let view = await renderDashboard(interaction);
+    const message = await interaction.editReply({ embeds: view.embeds, components: view.components });
+    if (!view.components.length) return;
 
-                return await InteractionHelper.safeEditReply(interaction, {
-                    embeds: [successEmbed('🗑️ Auto-Resets Cleared', 'All automated chat reset slots have been completely cleared and disabled.')]
-                });
-            }
-        } catch (error) {
-            if (error instanceof TitanBotError) {
-                return await replyUserError(interaction, { type: ErrorTypes.CONFIGURATION, message: error.userMessage || 'Something went wrong.' });
-            }
-            await handleInteractionError(interaction, error, { command: 'chat-reset' });
+    let selectedId = view.selectedId;
+    const collector = message.createMessageComponentCollector({ filter: (i) => i.user.id === interaction.user.id, time: 5 * 60 * 1000 });
+
+    collector.on('collect', async (i) => {
+      try {
+        if (i.customId === 'cr_pick') selectedId = i.values[0];
+
+        if (i.customId === 'cr_remove') {
+          const slots = await getSlots(interaction.guildId);
+          await saveSlots(interaction.guildId, slots.filter((s) => s.channelId !== selectedId));
+          selectedId = null;
         }
-    },
+
+        if (i.customId === 'cr_now') {
+          await i.deferUpdate();
+          const channel = await interaction.guild.channels.fetch(selectedId).catch(() => null);
+          if (!channel) {
+            await i.followUp({ content: 'That channel no longer exists.', flags: MessageFlags.Ephemeral });
+          } else {
+            try {
+              const fresh = await resetChannel(channel, { reason: `Chat reset by ${i.user.tag}` });
+              selectedId = fresh.id;
+              await i.followUp({ content: `Reset done: ${fresh}`, flags: MessageFlags.Ephemeral });
+            } catch (error) {
+              await i.followUp({ content: `I couldn't reset it: ${error.message}`, flags: MessageFlags.Ephemeral });
+            }
+          }
+          view = await renderDashboard(interaction, selectedId);
+          selectedId = view.selectedId;
+          return interaction.editReply({ embeds: view.embeds, components: view.components });
+        }
+
+        view = await renderDashboard(interaction, selectedId);
+        selectedId = view.selectedId;
+        await i.update({ embeds: view.embeds, components: view.components });
+      } catch (error) {
+        await i.followUp({ content: 'Something went wrong. Run `/chat-reset dashboard` again.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
+    });
+
+    collector.on('end', () => interaction.editReply({ components: [] }).catch(() => {}));
+  },
 };
