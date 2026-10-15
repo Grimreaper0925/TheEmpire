@@ -19,6 +19,13 @@ export default {
 
     const title = interaction.fields.getTextInputValue('title');
     const body = interaction.fields.getTextInputValue('body');
+    const read = (id) => {
+      try {
+        return interaction.fields.getTextInputValue(id);
+      } catch {
+        return '';
+      }
+    };
     const options = (stashKey && takeAnnouncement(stashKey)) || { styleKey: 'news' };
 
     let pingText;
@@ -43,6 +50,10 @@ export default {
         buttonUrl: options.buttonUrl,
         color: options.color ?? undefined,
         pingText,
+        tagline: read('tagline'),
+        points: read('points'),
+        closing: read('closing'),
+        vibe: options.vibe || 'hype',
       });
 
 
