@@ -9,7 +9,7 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { stashAnnouncement } from '../../services/announceStash.js';
-import { ANNOUNCE_STYLES } from '../../services/announcementBuilder.js';
+import { ANNOUNCE_STYLES, parseHexColor } from '../../services/announcementBuilder.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -34,7 +34,8 @@ export default {
     .addBooleanOption((o) => o.setName('ping_everyone').setDescription('Ping @everyone instead'))
     .addAttachmentOption((o) => o.setName('image').setDescription('Big banner image shown under the text'))
     .addStringOption((o) => o.setName('button_label').setDescription('Text on a link button, like "Shop now"').setMaxLength(80))
-    .addStringOption((o) => o.setName('button_url').setDescription('Where the button goes (https://...)').setMaxLength(300)),
+    .addStringOption((o) => o.setName('button_url').setDescription('Where the button goes (https://...)').setMaxLength(300))
+    .addStringOption((o) => o.setName('color').setDescription('Custom card color as hex, like #ff0000').setMaxLength(7)),
 
   async execute(interaction) {
     const channel = interaction.options.getChannel('channel', true);
@@ -59,12 +60,19 @@ export default {
       return interaction.reply({ content: 'The button link must start with https://', flags: MessageFlags.Ephemeral });
     }
 
+    const colorInput = interaction.options.getString('color');
+    const color = colorInput ? parseHexColor(colorInput) : null;
+    if (colorInput && color === null) {
+      return interaction.reply({ content: 'Use a hex color like `#ff0000`.', flags: MessageFlags.Ephemeral });
+    }
+
     const pingPart = everyone ? 'everyone' : role ? role.id : 'none';
     const stashKey = stashAnnouncement({
       styleKey: interaction.options.getString('style') || 'news',
       imageUrl: image?.url || null,
       buttonLabel: interaction.options.getString('button_label'),
       buttonUrl,
+      color,
     });
 
     const modal = new ModalBuilder()

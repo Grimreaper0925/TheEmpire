@@ -21,28 +21,32 @@ export default {
     const body = interaction.fields.getTextInputValue('body');
     const options = (stashKey && takeAnnouncement(stashKey)) || { styleKey: 'news' };
 
-    const { embed, components } = await buildAnnouncement({
-      guild: interaction.guild,
-      styleKey: options.styleKey,
-      title,
-      body,
-      imageUrl: options.imageUrl,
-      buttonLabel: options.buttonLabel,
-      buttonUrl: options.buttonUrl,
-    });
-
-    let content;
+    let pingText;
     const allowedMentions = { parse: [] };
     if (pingPart === 'everyone') {
-      content = '@everyone';
+      pingText = '@everyone';
       allowedMentions.parse = ['everyone'];
     } else if (pingPart && pingPart !== 'none') {
-      content = `<@&${pingPart}>`;
+      pingText = `<@&${pingPart}>`;
       allowedMentions.roles = [pingPart];
     }
 
     try {
-      const sent = await channel.send({ content, embeds: [embed], components, allowedMentions });
+      const { components, flags } = await buildAnnouncement({
+        guild: interaction.guild,
+        author: interaction.member?.displayName || interaction.user.username,
+        styleKey: options.styleKey,
+        title,
+        body,
+        imageUrl: options.imageUrl,
+        buttonLabel: options.buttonLabel,
+        buttonUrl: options.buttonUrl,
+        color: options.color ?? undefined,
+        pingText,
+      });
+
+
+      const sent = await channel.send({ components, flags, allowedMentions });
       logger.info('Announcement posted', { guildId: interaction.guildId, by: interaction.user.id, channelId });
       return interaction.editReply(`Posted in ${channel}: ${sent.url}`);
     } catch (error) {

@@ -1,76 +1,130 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from 'discord.js';
 import { getStoreConfig, promoIsActive } from './storeService.js';
 
 export const ANNOUNCE_STYLES = {
-  promo: { label: 'Promo / Sale', emoji: '🔥', color: 0xff3b30, divider: '🔥' },
-  news: { label: 'News', emoji: '📢', color: 0x5865f2, divider: '📢' },
-  update: { label: 'Update', emoji: '🛠️', color: 0x2ecc71, divider: '🛠️' },
-  event: { label: 'Event', emoji: '🎉', color: 0xf1c40f, divider: '🎉' },
-  alert: { label: 'Important', emoji: '⚠️', color: 0xe67e22, divider: '⚠️' },
+  promo: { label: 'Promo / Sale', emoji: '🔥', color: 0xff3b30 },
+  news: { label: 'News', emoji: '📢', color: 0x5865f2 },
+  update: { label: 'Update', emoji: '🛠️', color: 0x2ecc71 },
+  event: { label: 'Event', emoji: '🎉', color: 0xf1c40f },
+  alert: { label: 'Important', emoji: '⚠️', color: 0xe67e22 },
 };
 
-const DIVIDER_LENGTH = 7;
+const MAX_BODY_CHARS = 3000;
 
-function isHttpsUrl(value) {
+export function isHttpsUrl(value) {
   return typeof value === 'string' && /^https:\/\/[^\s]+$/i.test(value);
 }
 
+export function parseHexColor(value) {
+  const match = String(value || '').trim().match(/^#?([0-9a-f]{6})$/i);
+  return match ? parseInt(match[1], 16) : null;
+}
+
+const text = (content) => new TextDisplayBuilder().setContent(content);
+const divider = () => new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large);
+
 /**
- * Builds a polished announcement: styled color and emoji, server icon, a
- * divider, and (for promos) automatic code, discount and countdown fields
- * plus a Shop button taken from /storeconfig.
+ * Builds a modern "Components V2" announcement: a colored card with an optional
+ * full-width banner, a big title, divider lines, the message in normal chat
+ * text, promo details with a countdown, and buttons inside the card.
+ *
+ * These messages can't have a normal `content` or `embeds`, so the ping is
+ * placed as the first text block.
  */
-export async function buildAnnouncement({ guild, styleKey, title, body, imageUrl, buttonLabel, buttonUrl }) {
+export async function buildAnnouncement({
+  guild,
+  author,
+  styleKey,
+  title,
+  body,
+  imageUrl,
+  buttonLabel,
+  buttonUrl,
+  color,
+  pingText,
+}) {
   const style = ANNOUNCE_STYLES[styleKey] || ANNOUNCE_STYLES.news;
-  const icon = guild.iconURL({ size: 256 }) || undefined;
+  const icon = guild.iconURL({ size: 256 }) || null;
+  const hasBanner = isHttpsUrl(imageUrl);
 
-  const divider = Array(DIVIDER_LENGTH).fill(style.divider).join(' ');
+  const container = new ContainerBuilder().setAccentColor(color ?? style.color);
 
-  // Built as a plain embed object on purpose. The bot's shared EmbedBuilder strips
-  // emojis from titles, descriptions and fields, which made announcements look flat.
-  const embed = {
-    color: style.color,
-    author: { name: `${guild.name}  •  ${style.label}`, ...(icon ? { icon_url: icon } : {}) },
-    title: `${style.emoji}  ${title}`.slice(0, 256),
-    description: `${divider}\n\n${body}\n\n${divider}`.slice(0, 4096),
-    fields: [],
-  };
+  if (hasBanner) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(imageUrl))
+    );
+  }
 
-  if (icon) embed.thumbnail = { url: icon };
-  if (isHttpsUrl(imageUrl)) embed.image = { url: imageUrl };
+  const heading = `-# ${style.emoji} ${style.label.toUpperCase()}  •  ${guild.name}\n# ${style.emoji} ${title}`;
+  if (!hasBanner && icon) {
+    container.addSectionComponents(
+      new SectionBuilder().addTextDisplayComponents(text(heading)).setThumbnailAccessory(new ThumbnailBuilder().setURL(icon))
+    );
+  } else {
+    container.addTextDisplayComponents(text(heading));
+  }
 
+  container.addSeparatorComponents(divider());
+  container.addTextDisplayComponents(text(String(body).slice(0, MAX_BODY_CHARS)));
+
+  const buttons = [];
   let linkLabel = buttonLabel;
   let linkUrl = buttonUrl;
 
   if (styleKey === 'promo') {
     const store = await getStoreConfig(guild.id);
+
     if (promoIsActive(store)) {
-      embed.fields.push(
-        { name: '🎟️  Code', value: `\`\`\`${store.promoCode}\`\`\``, inline: true },
-        { name: '💸  Discount', value: `**${store.promoPercent}% OFF**`, inline: true }
-      );
+      const lines = [`## 💸 ${store.promoPercent}% OFF`, `🎟️ Use code **\`${store.promoCode}\`** at checkout`];
       if (store.promoEndsAt) {
         const ts = Math.floor(new Date(store.promoEndsAt).getTime() / 1000);
-        embed.fields.push({ name: '⏳  Ends', value: `<t:${ts}:R>\n<t:${ts}:f>`, inline: true });
+        lines.push(`⏳ Ends <t:${ts}:R>  •  <t:${ts}:f>`);
+      }
+      container.addSeparatorComponents(divider());
+      container.addTextDisplayComponents(text(lines.join('\n')));
+
+      if (/^[A-Za-z0-9_-]{1,40}$/.test(store.promoCode)) {
+        buttons.push(
+          new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel('Get code').setEmoji('🎟️').setCustomId(`announce_code:${store.promoCode}`)
+        );
       }
     }
+
     if (!linkUrl) {
       linkUrl = store.url;
       linkLabel = linkLabel || 'Shop now';
     }
   }
 
-  const components = [];
   if (isHttpsUrl(linkUrl)) {
-    components.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setStyle(ButtonStyle.Link)
-          .setURL(linkUrl)
-          .setLabel((linkLabel || 'Learn more').slice(0, 80))
-      )
+    buttons.unshift(
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(linkUrl).setLabel((linkLabel || 'Learn more').slice(0, 80))
     );
   }
 
-  return { embed, components };
+  if (buttons.length > 0) {
+    container.addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small));
+    container.addActionRowComponents(new ActionRowBuilder().addComponents(...buttons.slice(0, 5)));
+  }
+
+  container.addTextDisplayComponents(text(`-# Posted by ${author} • <t:${Math.floor(Date.now() / 1000)}:f>`));
+
+  const components = [];
+  if (pingText) components.push(text(pingText));
+  components.push(container);
+
+  return { components, flags: MessageFlags.IsComponentsV2 };
 }
