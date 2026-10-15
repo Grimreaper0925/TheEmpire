@@ -16,7 +16,7 @@ import { logger } from '../../utils/logger.js';
 export default {
   data: new SlashCommandBuilder()
     .setName('verifysetup')
-    .setDescription('Set up human verification and the AI greeter')
+    .setDescription('Set up human verification and the welcome greeting')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addRoleOption((o) =>
       o.setName('role').setDescription('Role given to verified members').setRequired(true)

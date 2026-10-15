@@ -4,7 +4,7 @@ import { getStoreConfig, saveStoreConfig, describePromo } from '../../services/s
 export default {
   data: new SlashCommandBuilder()
     .setName('storeconfig')
-    .setDescription('Change the store link and promo code that /store and the AI helper use')
+    .setDescription('Change the store link and promo code that /store uses')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false)
     .addStringOption((o) => o.setName('url').setDescription('Store link (https://...)').setMaxLength(200))
