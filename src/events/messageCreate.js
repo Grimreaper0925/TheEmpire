@@ -19,6 +19,9 @@ import {
   recordCorrectCount,
 } from '../services/countingGameService.js';
 
+import { getVerifyConfig } from '../services/verificationService.js';
+import { askConcierge, isAiConfigured } from '../services/aiConciergeService.js';
+
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
 
@@ -35,6 +38,11 @@ export default {
         return;
       }
 
+      const aiHandled = await handleAiConcierge(message, client);
+      if (aiHandled) {
+        return;
+      }
+
       await handlePrefixCommand(message, client);
 
       await handleLeveling(message, client);
@@ -43,6 +51,54 @@ export default {
     }
   }
 };
+
+async function handleAiConcierge(message, client) {
+  try {
+    if (!isAiConfigured()) return false;
+
+    const config = await getVerifyConfig(message.guild.id);
+    const inAiChannel = Boolean(config.aiChannelId) && message.channel.id === config.aiChannelId;
+    const mentionedMe = message.mentions.users.has(client.user.id) && !message.mentions.everyone;
+    if (!inAiChannel && !mentionedMe) return false;
+
+    const text = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+    if (!text) return false;
+
+    // Let normal prefix commands through in the AI channel.
+    const guildConfig = await getGuildConfig(client, message.guild.id);
+    const prefix = guildConfig?.prefix || getCommandPrefix();
+    if (prefix && text.startsWith(prefix)) return false;
+
+    const allowed = await checkRateLimit(`ai_concierge:${message.author.id}`, 5, 60000);
+    if (!allowed) {
+      await message.reply({ content: 'Slow down a little, then ask me again.', allowedMentions: { repliedUser: false } });
+      return true;
+    }
+
+    await message.channel.sendTyping().catch(() => {});
+
+    const reply = await askConcierge({
+      channelId: message.channel.id,
+      userId: message.author.id,
+      username: message.member?.displayName || message.author.username,
+      text,
+    });
+
+    if (!reply) {
+      await message.reply({
+        content: "I couldn't answer that right now. A staff member can help, or open a ticket.",
+        allowedMentions: { repliedUser: false },
+      });
+      return true;
+    }
+
+    await message.reply({ content: reply, allowedMentions: { parse: [], repliedUser: false } });
+    return true;
+  } catch (error) {
+    logger.error('Error in AI concierge:', error);
+    return false;
+  }
+}
 
 async function handlePrefixCommand(message, client) {
   try {

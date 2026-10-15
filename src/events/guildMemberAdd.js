@@ -1,6 +1,7 @@
 import { Events, EmbedBuilder } from 'discord.js';
 import { getFromDb, setInDb } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
+import { getVerifyConfig } from '../services/verificationService.js';
 
 // Attribution works by diffing invite use-counts between two guild.invites.fetch()
 // snapshots. That's only safe if joins are handled one at a time per guild —
@@ -164,11 +165,34 @@ export async function creditInviteOwner(guild, client, config, ownerId, amount) 
     await setInDb(userKey, userData);
 }
 
+async function sendWelcomeGreeting(member) {
+    try {
+        const verifyConfig = await getVerifyConfig(member.guild.id);
+        if (!verifyConfig.welcomeChannelId) return;
+
+        const channel = member.guild.channels.cache.get(verifyConfig.welcomeChannelId);
+        if (!channel?.isTextBased()) return;
+
+        const verifyHint = verifyConfig.verifyChannelId
+            ? ` Head to <#${verifyConfig.verifyChannelId}> and press **Verify** to unlock the server.`
+            : '';
+        await channel.send({
+            content: `Welcome to ${member.guild.name}, ${member}!${verifyHint} Ask me anything, I'm the server's AI helper.`,
+            allowedMentions: { users: [member.id] },
+        });
+    } catch (error) {
+        logger.warn('Could not send welcome greeting', { error: error.message });
+    }
+}
+
 export default {
     name: Events.GuildMemberAdd,
     async execute(member, client) {
         // 1. Block bots immediately
         if (member.user.bot) return;
+
+        // Greet the new member and point them to verification.
+        await sendWelcomeGreeting(member);
 
         // 2. Real human verification check (Membership Screening / rules gate).
         // Don't count yet — guildMemberUpdate.js picks this member back up and
