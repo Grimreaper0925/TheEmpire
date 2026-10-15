@@ -90,19 +90,25 @@ export async function testAi() {
 
 async function askGemini({ store, history }) {
   const model = process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL;
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: buildSystemPrompt(store) }] },
+    contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+    generationConfig: { maxOutputTokens: 400 },
+  });
+
+  // Google sometimes answers 503/429 during demand spikes; retry a couple of times.
+  let response;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    response = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: buildSystemPrompt(store) }] },
-        contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        generationConfig: { maxOutputTokens: 400 },
-      }),
+      body,
       signal: AbortSignal.timeout(20000),
-    }
-  );
+    });
+    if (response.ok || ![429, 500, 503].includes(response.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+  }
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     logger.error('Gemini API error', { status: response.status, detail: detail.slice(0, 300) });
