@@ -70,6 +70,24 @@ function faqReply(store, text) {
   return 'I am a simple helper, so I may not have that one. I can help with **verifying**, the **store**, the **current deal** and **support tickets**. For anything else, a staff member can help.';
 }
 
+export let lastAiError = null;
+
+// Admin check: which engine is active, and does a real call work?
+export async function testAi() {
+  const provider = aiProvider();
+  if (provider === 'faq') return { provider, ok: false, detail: 'No GEMINI_API_KEY or ANTHROPIC_API_KEY found, so only scripted replies are used.' };
+  try {
+    const reply = provider === 'gemini'
+      ? await askGemini({ store: { tagline: 'test', url: 'https://example.com' }, history: [{ role: 'user', content: 'Say OK.' }] })
+      : await askConcierge({ guildId: 'test', channelId: 'test', userId: 'test', username: 'test', text: 'Say OK.' });
+    return reply
+      ? { provider, ok: true, detail: `Got a reply: ${reply.slice(0, 80)}` }
+      : { provider, ok: false, detail: lastAiError || 'The AI returned nothing.' };
+  } catch (error) {
+    return { provider, ok: false, detail: error.message };
+  }
+}
+
 async function askGemini({ store, history }) {
   const model = process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL;
   const response = await fetch(
@@ -88,6 +106,7 @@ async function askGemini({ store, history }) {
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     logger.error('Gemini API error', { status: response.status, detail: detail.slice(0, 300) });
+    lastAiError = `Google returned ${response.status}: ${detail.slice(0, 200)}`;
     return null;
   }
   const data = await response.json();
