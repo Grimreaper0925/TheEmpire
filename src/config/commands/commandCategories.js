@@ -3,6 +3,7 @@
  */
 
 export const CATEGORY_ICONS = {
+  Admin: '👑',
   Birthday: '🎂',
   Community: '👥',
   Core: 'ℹ️',

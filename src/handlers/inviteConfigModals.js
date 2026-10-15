@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { getFromDb, setInDb } from '../../utils/database.js';
+import { getFromDb, setInDb } from '../utils/database.js';
 
 export default {
     name: 'invcfg_modal', // Or match whatever your interactions loader expects for modals starting with invcfg_modal

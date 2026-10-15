@@ -25,12 +25,11 @@ src/
     - modules/logging_setchannel.js
   - Ticket/                   -> support ticket system + dashboard
   - ServerStats/              -> server stats channel system
-  - Economy/                  -> economy system
   - Moderation/               -> moderation/admin commands
   - Verification/             -> member verification flow
   - JoinToCreate/             -> dynamic voice channel creation
   - Reaction_roles/           -> automatic role assignment
-  - Birthday/, Fun/, Giveaway/, Leveling/, Search/, Tools/, Utility/, Welcome/
+  - Admin/, Fun/, Giveaway/, Moderation/, Utility/, Verification/
 
 - config/                     -> centralized configuration modules
 - events/                     -> Discord event listeners
