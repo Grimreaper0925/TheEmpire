@@ -8,7 +8,8 @@ import {
   TextInputStyle,
   MessageFlags,
 } from 'discord.js';
-import { stashImage } from '../../services/announceStash.js';
+import { stashAnnouncement } from '../../services/announceStash.js';
+import { ANNOUNCE_STYLES } from '../../services/announcementBuilder.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -23,9 +24,17 @@ export default {
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
         .setRequired(true)
     )
+    .addStringOption((o) =>
+      o
+        .setName('style')
+        .setDescription('Look of the announcement (default: News)')
+        .addChoices(...Object.entries(ANNOUNCE_STYLES).map(([value, v]) => ({ name: `${v.emoji} ${v.label}`, value })))
+    )
     .addRoleOption((o) => o.setName('ping').setDescription('Role to ping with it'))
     .addBooleanOption((o) => o.setName('ping_everyone').setDescription('Ping @everyone instead'))
-    .addAttachmentOption((o) => o.setName('image').setDescription('Optional image for the announcement')),
+    .addAttachmentOption((o) => o.setName('image').setDescription('Big banner image shown under the text'))
+    .addStringOption((o) => o.setName('button_label').setDescription('Text on a link button, like "Shop now"').setMaxLength(80))
+    .addStringOption((o) => o.setName('button_url').setDescription('Where the button goes (https://...)').setMaxLength(300)),
 
   async execute(interaction) {
     const channel = interaction.options.getChannel('channel', true);
@@ -45,11 +54,21 @@ export default {
       });
     }
 
+    const buttonUrl = interaction.options.getString('button_url');
+    if (buttonUrl && !/^https:\/\/[^\s]+$/i.test(buttonUrl)) {
+      return interaction.reply({ content: 'The button link must start with https://', flags: MessageFlags.Ephemeral });
+    }
+
     const pingPart = everyone ? 'everyone' : role ? role.id : 'none';
-    const imagePart = image ? stashImage(image.url) : 'none';
+    const stashKey = stashAnnouncement({
+      styleKey: interaction.options.getString('style') || 'news',
+      imageUrl: image?.url || null,
+      buttonLabel: interaction.options.getString('button_label'),
+      buttonUrl,
+    });
 
     const modal = new ModalBuilder()
-      .setCustomId(`announce_modal:${channel.id}:${pingPart}:${imagePart}`)
+      .setCustomId(`announce_modal:${channel.id}:${pingPart}:${stashKey}`)
       .setTitle('New announcement')
       .addComponents(
         new ActionRowBuilder().addComponents(

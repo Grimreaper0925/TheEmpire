@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, MessageFlags } from 'discord.js';
-import { createEmbed } from '../../../utils/embeds.js';
-import { takeStashedImage } from '../../../services/announceStash.js';
+import { takeAnnouncement } from '../../../services/announceStash.js';
+import { buildAnnouncement } from '../../../services/announcementBuilder.js';
 import { logger } from '../../../utils/logger.js';
 
 export default {
@@ -13,16 +13,23 @@ export default {
       return interaction.editReply('You need **Manage Server** to post announcements.');
     }
 
-    const [channelId, pingPart, imagePart] = args;
+    const [channelId, pingPart, stashKey] = args;
     const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
     if (!channel?.isTextBased()) return interaction.editReply('I can no longer find that channel.');
 
     const title = interaction.fields.getTextInputValue('title');
     const body = interaction.fields.getTextInputValue('body');
-    const imageUrl = imagePart && imagePart !== 'none' ? takeStashedImage(imagePart) : null;
+    const options = (stashKey && takeAnnouncement(stashKey)) || { styleKey: 'news' };
 
-    const embed = createEmbed({ title, description: body });
-    if (imageUrl) embed.setImage(imageUrl);
+    const { embed, components } = await buildAnnouncement({
+      guild: interaction.guild,
+      styleKey: options.styleKey,
+      title,
+      body,
+      imageUrl: options.imageUrl,
+      buttonLabel: options.buttonLabel,
+      buttonUrl: options.buttonUrl,
+    });
 
     let content;
     const allowedMentions = { parse: [] };
@@ -35,7 +42,7 @@ export default {
     }
 
     try {
-      const sent = await channel.send({ content, embeds: [embed], allowedMentions });
+      const sent = await channel.send({ content, embeds: [embed], components, allowedMentions });
       logger.info('Announcement posted', { guildId: interaction.guildId, by: interaction.user.id, channelId });
       return interaction.editReply(`Posted in ${channel}: ${sent.url}`);
     } catch (error) {
