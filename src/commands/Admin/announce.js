@@ -94,7 +94,7 @@ export default {
         input('body', 'Message', TextInputStyle.Paragraph, {
           max: 1800,
           required: true,
-          placeholder: 'Write it like normal. Lines starting with - become bullet points. Percentages get bolded for you.',
+          placeholder: 'Discord text works: **bold**, __underline__, ~~strike~~, ||spoiler||, > quote, ## big heading. Lines starting with - become bullets.',
         }),
         input('points', 'Highlights (optional, one per line)', TextInputStyle.Paragraph, {
           max: 900,
