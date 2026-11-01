@@ -42,6 +42,11 @@ export function isHttpsUrl(value) {
   return typeof value === 'string' && /^https:\/\/[^\s]+$/i.test(value);
 }
 
+// A file sent together with the message, like attachment://banner.png (used by scheduled posts).
+function isAttachmentRef(value) {
+  return typeof value === 'string' && /^attachment:\/\/[\w.-]+$/.test(value);
+}
+
 const NAMED_COLORS = {
   red: 0xed4245,
   orange: 0xe67e22,
@@ -160,7 +165,7 @@ export async function buildAnnouncement({
 }) {
   const style = ANNOUNCE_STYLES[styleKey] || ANNOUNCE_STYLES.news;
   const icon = guild.iconURL({ size: 256 }) || null;
-  const hasBanner = isHttpsUrl(imageUrl);
+  const hasBanner = isHttpsUrl(imageUrl) || isAttachmentRef(imageUrl);
 
   const container = new ContainerBuilder().setAccentColor(color ?? style.color);
 

@@ -3,6 +3,7 @@ import { startChatResetScheduler } from '../services/chatResetService.js';
 import { loadTicketCache, startTicketScheduler } from '../services/ticketSystem.js';
 import { autoClose } from '../services/ticketFlows.js';
 import { startAutomodScheduler } from '../services/automodService.js';
+import { startAnnounceScheduler } from '../services/announceSchedule.js';
 
 export default {
     name: 'ready',
@@ -14,5 +15,6 @@ export default {
         await loadTicketCache(client);
         startTicketScheduler(client, { autoClose });
         startAutomodScheduler(client);
+        startAnnounceScheduler(client);
     }
 };

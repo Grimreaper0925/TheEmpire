@@ -10,11 +10,12 @@ import {
 } from 'discord.js';
 import { stashAnnouncement } from '../../services/announceStash.js';
 import { ANNOUNCE_STYLES, ANNOUNCE_VIBES, parseHexColor } from '../../services/announcementBuilder.js';
+import { parseWhen, normalizeRepeat, tzLabel } from '../../services/announceTime.js';
 
 export default {
   data: new SlashCommandBuilder()
     .setName('announce')
-    .setDescription('Post a nicely formatted announcement')
+    .setDescription('Post an announcement now, or schedule it for later (you get a preview first)')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false)
     .addChannelOption((o) =>
@@ -41,7 +42,19 @@ export default {
     .addAttachmentOption((o) => o.setName('image').setDescription('Big banner image shown under the text'))
     .addStringOption((o) => o.setName('button_label').setDescription('Text on a link button, like "Shop now"').setMaxLength(80))
     .addStringOption((o) => o.setName('button_url').setDescription('Where the button goes (https://...)').setMaxLength(300))
-    .addStringOption((o) => o.setName('color').setDescription('Card color: a name like red, or hex like #ff0000').setMaxLength(20)),
+    .addStringOption((o) => o.setName('color').setDescription('Card color: a name like red, or hex like #ff0000').setMaxLength(20))
+    .addStringOption((o) =>
+      o
+        .setName('when')
+        .setDescription(`Schedule it: "tomorrow 6pm", "in 2h", "2026-11-05 18:00" (${tzLabel()}). Empty = post now`.slice(0, 100))
+        .setMaxLength(40)
+    )
+    .addStringOption((o) =>
+      o
+        .setName('repeat')
+        .setDescription('Repeat a scheduled announcement (needs "when")')
+        .addChoices({ name: 'Do not repeat', value: 'none' }, { name: 'Every day', value: 'daily' }, { name: 'Every week', value: 'weekly' })
+    ),
 
   async execute(interaction) {
     const channel = interaction.options.getChannel('channel', true);
@@ -75,8 +88,22 @@ export default {
       });
     }
 
+    const whenInput = interaction.options.getString('when');
+    const repeat = normalizeRepeat(interaction.options.getString('repeat')) || 'none';
+    let runAt = null;
+    if (whenInput) {
+      const parsed = parseWhen(whenInput);
+      if (parsed.error) return interaction.reply({ content: parsed.error, flags: MessageFlags.Ephemeral });
+      runAt = parsed.ts;
+    } else if (repeat !== 'none') {
+      return interaction.reply({ content: 'To repeat an announcement, also fill in **when** (the first time it should post).', flags: MessageFlags.Ephemeral });
+    }
+
     const pingPart = everyone ? 'everyone' : role ? role.id : 'none';
     const stashKey = stashAnnouncement({
+      runAt,
+      repeat,
+      whenText: whenInput || '',
       styleKey: interaction.options.getString('style') || 'news',
       imageUrl: image?.url || null,
       buttonLabel: interaction.options.getString('button_label'),
