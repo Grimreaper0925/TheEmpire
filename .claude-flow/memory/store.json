@@ -17,6 +17,15 @@
       "lastAccessed": "2026-11-01T12:09:43.925Z",
       "accessCount": 0,
       "expiresAt": "2026-12-01T12:09:43.925Z"
+    },
+    "cmd-1793535094519": {
+      "key": "cmd-1793535094519",
+      "value": "{\"command\":\"git add src/services/scheduledAnnouncements.js src/commands/Admin/announce.js src/interactions/modals/admin/announceSubmit.js src/events/ready.js src/services/announcementBuilder.js && git commit -q -m \\\"$(cat <<'EOF'\",\"exitCode\":0,\"success\":true}",
+      "namespace": "commands",
+      "storedAt": "2026-11-01T12:11:34.519Z",
+      "lastAccessed": "2026-11-01T12:11:34.519Z",
+      "accessCount": 0,
+      "expiresAt": "2026-12-01T12:11:34.519Z"
     }
   },
   "version": "3.0.0"

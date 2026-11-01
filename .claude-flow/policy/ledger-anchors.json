@@ -81,6 +81,33 @@
       "ts": 1793534998700,
       "event": "append",
       "hash": "0e4c092cbd2122936b086b51bae0629607810b51a0cb66e09cefabb5cd4fa94b"
+    },
+    {
+      "seq": 9,
+      "length": 10,
+      "headHash": "sha256:a4aa808c35354d54f519085df71c4b3317e85048dc02f24af986115088636243",
+      "prevAnchorHash": "0e4c092cbd2122936b086b51bae0629607810b51a0cb66e09cefabb5cd4fa94b",
+      "ts": 1793535094515,
+      "event": "append",
+      "hash": "f8246529b0f1055c47b6b44a0934198b3c0e0df42d4ee7f48b03a89126596d71"
+    },
+    {
+      "seq": 10,
+      "length": 11,
+      "headHash": "sha256:b883bc95e47255959ab29a55f5d498f191bd9792b13159ffb225affe13ea77c2",
+      "prevAnchorHash": "f8246529b0f1055c47b6b44a0934198b3c0e0df42d4ee7f48b03a89126596d71",
+      "ts": 1793535098320,
+      "event": "append",
+      "hash": "511e9f903b13ce09e72d365fc6043ce23d2d331233bfe875090da4f1c455ebb6"
+    },
+    {
+      "seq": 11,
+      "length": 12,
+      "headHash": "sha256:7b76953918a023786f383a8ee94e7c1d93d9ec5e348f241f5d46e02cd2072a60",
+      "prevAnchorHash": "511e9f903b13ce09e72d365fc6043ce23d2d331233bfe875090da4f1c455ebb6",
+      "ts": 1793535103926,
+      "event": "append",
+      "hash": "bf6356d254f17ca4f9e95d7e01fd991cffd37726c56a2ccb5153ae96c7cbe36a"
     }
   ]
 }
