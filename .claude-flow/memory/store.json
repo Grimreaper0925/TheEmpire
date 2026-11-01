@@ -1,0 +1,23 @@
+{
+  "entries": {
+    "cmd-1793534915611": {
+      "key": "cmd-1793534915611",
+      "value": "{\"command\":\"node -v && grep -n \\\"\\\\\\\"type\\\\\\\"\\\\|\\\\\\\"test\\\\\\\"\\\\|\\\\\\\"lint\\\\\\\"\\\" package.json\",\"exitCode\":0,\"success\":true}",
+      "namespace": "commands",
+      "storedAt": "2026-11-01T12:08:35.611Z",
+      "lastAccessed": "2026-11-01T12:08:35.611Z",
+      "accessCount": 0,
+      "expiresAt": "2026-12-01T12:08:35.611Z"
+    },
+    "cmd-1793534983925": {
+      "key": "cmd-1793534983925",
+      "value": "{\"command\":\"cat > \\\"$TEMP/t.mjs\\\" <<'EOF'\",\"exitCode\":0,\"success\":true}",
+      "namespace": "commands",
+      "storedAt": "2026-11-01T12:09:43.925Z",
+      "lastAccessed": "2026-11-01T12:09:43.925Z",
+      "accessCount": 0,
+      "expiresAt": "2026-12-01T12:09:43.925Z"
+    }
+  },
+  "version": "3.0.0"
+}

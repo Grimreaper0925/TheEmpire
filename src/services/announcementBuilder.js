@@ -160,7 +160,7 @@ export async function buildAnnouncement({
 }) {
   const style = ANNOUNCE_STYLES[styleKey] || ANNOUNCE_STYLES.news;
   const icon = guild.iconURL({ size: 256 }) || null;
-  const hasBanner = isHttpsUrl(imageUrl);
+  const hasBanner = isHttpsUrl(imageUrl) || (typeof imageUrl === 'string' && imageUrl.startsWith('attachment://'));
 
   const container = new ContainerBuilder().setAccentColor(color ?? style.color);
 
