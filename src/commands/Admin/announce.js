@@ -12,6 +12,15 @@ import { stashAnnouncement } from '../../services/announceStash.js';
 import { ANNOUNCE_STYLES, ANNOUNCE_VIBES, parseHexColor } from '../../services/announcementBuilder.js';
 import { cancelScheduled, getScheduled, parseSchedule } from '../../services/scheduledAnnouncements.js';
 
+const SALE_HINT = 'What is on sale and why it is worth it. Use - for bullets. The % and code are highlighted for you.';
+const BODY_HINTS = {
+  update: 'Added: new ticket panel\nFixed: giveaway reroll\nChanged: faster loading\nRemoved: old command',
+  promo: SALE_HINT,
+  flash: SALE_HINT,
+  restock: 'What is back in stock. One item per line with - for bullets.',
+  maintenance: 'What is being worked on, how long it should take, and what will be down.',
+};
+
 const reply = (interaction, content) => interaction.reply({ content, flags: MessageFlags.Ephemeral });
 
 export default {
@@ -130,8 +139,9 @@ async function post(interaction) {
   }
 
   const pingPart = everyone ? 'everyone' : role ? role.id : 'none';
+  const styleKey = interaction.options.getString('style') || 'news';
   const stashKey = stashAnnouncement({
-    styleKey: interaction.options.getString('style') || 'news',
+    styleKey,
     imageUrl: image?.url || null,
     buttonLabel: interaction.options.getString('button_label'),
     buttonUrl,
@@ -152,7 +162,7 @@ async function post(interaction) {
       input('body', 'Message', TextInputStyle.Paragraph, {
         max: 1800,
         required: true,
-        placeholder: 'Try **bold** __underline__ ~~strike~~ ||spoiler|| > quote ## heading. Use - for bullets.',
+        placeholder: BODY_HINTS[styleKey] || 'Try **bold** __underline__ ~~strike~~ ||spoiler|| > quote ## heading. Use - for bullets.',
       }),
       input('points', 'Highlights (optional, one per line)', TextInputStyle.Paragraph, {
         max: 900,

@@ -14,11 +14,54 @@ import {
 } from 'discord.js';
 import { getStoreConfig, promoIsActive } from './storeService.js';
 
+// `sale` styles pull the live promo (code, percent, countdown) from the store config.
 export const ANNOUNCE_STYLES = {
-  promo: { label: 'Promo / Sale', emoji: '🔥', color: 0xff3b30, bullets: ['💀', '⚡', '👑', '💎', '🎟️'] },
+  promo: { label: 'Promo / Sale', emoji: '🔥', color: 0xff3b30, bullets: ['💀', '⚡', '👑', '💎', '🎟️'], sale: true },
+  flash: {
+    label: 'Flash Sale',
+    emoji: '⚡',
+    color: 0xff9500,
+    bullets: ['⚡', '🔥', '💥', '⏰', '🎟️'],
+    sale: true,
+    signoffs: ['Gone when the timer hits zero. ⏰', 'Blink and you miss it. ⚡', 'No extensions. No excuses. 🔥'],
+  },
+  restock: {
+    label: 'New Drop / Restock',
+    emoji: '📦',
+    color: 0x1abc9c,
+    bullets: ['📦', '✨', '🆕', '💎', '🛒'],
+    signoffs: ['Stock is limited. Grab yours. 📦', 'Fresh in the Empire. 👑'],
+  },
+  update: {
+    label: 'Update / Changelog',
+    emoji: '🛠️',
+    color: 0x2ecc71,
+    bullets: ['✅', '🔧', '🚀', '🧩', '📈'],
+    changelog: true,
+    signoffs: ['Thanks for being part of the Empire. 👑'],
+  },
   news: { label: 'News', emoji: '📢', color: 0x5865f2, bullets: ['📌', '📣', '🧭', '🔔', '🗞️'] },
-  update: { label: 'Update', emoji: '🛠️', color: 0x2ecc71, bullets: ['✅', '🔧', '🚀', '🧩', '📈'] },
-  event: { label: 'Event', emoji: '🎉', color: 0xf1c40f, bullets: ['🎟️', '🎮', '🏆', '🎁', '🎶'] },
+  event: {
+    label: 'Event',
+    emoji: '🎉',
+    color: 0xf1c40f,
+    bullets: ['🎟️', '🎮', '🏆', '🎁', '🎶'],
+    signoffs: ["Don't miss it. See you there. 🎉"],
+  },
+  giveaway: {
+    label: 'Giveaway',
+    emoji: '🎁',
+    color: 0xeb459e,
+    bullets: ['🎁', '🏆', '🎟️', '✨', '👑'],
+    signoffs: ['Good luck, Empire. 🍀'],
+  },
+  maintenance: {
+    label: 'Maintenance',
+    emoji: '🚧',
+    color: 0x95a5a6,
+    bullets: ['🚧', '🔧', '⏳', '✅', '📍'],
+    signoffs: ['Thanks for your patience. 🙏'],
+  },
   alert: { label: 'Important', emoji: '⚠️', color: 0xe67e22, bullets: ['⚠️', '🛑', '🔔', '📛', '🧯'] },
 };
 
@@ -76,10 +119,54 @@ function bulletAt(bullets, index, vibe) {
   return vibe === 'hype' ? bullets[index % bullets.length] : '•';
 }
 
+const CHANGE_GROUPS = [
+  { key: 'added', title: '✨ Added', words: 'added|add|new', mark: '+' },
+  { key: 'changed', title: '🔧 Changed', words: 'changed|change|improved|updated', mark: '~' },
+  { key: 'fixed', title: '🐛 Fixed', words: 'fixed|fix', mark: '!' },
+  { key: 'removed', title: '🗑️ Removed', words: 'removed|remove|deleted', mark: 'x' },
+];
+
+/**
+ * Groups changelog lines under headings. A line counts if it starts with a word
+ * ("Added: ...", "Fixed - ...") or a marker ("+ " added, "~ " changed, "! " fixed,
+ * "x " removed). Other lines stay on top as an intro. Returns the text unchanged
+ * when nothing looks like a changelog.
+ */
+export function groupChangelog(body) {
+  const groups = new Map(CHANGE_GROUPS.map((g) => [g.key, []]));
+  const intro = [];
+  let matched = false;
+
+  for (const line of tidy(body).split('\n')) {
+    let hit = null;
+    for (const g of CHANGE_GROUPS) {
+      const word = line.match(new RegExp(`^\\s*(?:${g.words})\\s*[:\\-–]\\s*(.+)$`, 'i'));
+      const mark = line.match(new RegExp(`^\\s*${g.mark.replace(/[+~!]/g, '\\$&')}\\s+(.+)$`, g.mark === 'x' ? 'i' : ''));
+      const found = word || mark;
+      if (found) {
+        hit = { key: g.key, text: found[1].trim() };
+        break;
+      }
+    }
+    if (hit) {
+      groups.get(hit.key).push(hit.text);
+      matched = true;
+    } else {
+      intro.push(line);
+    }
+  }
+
+  if (!matched) return tidy(body);
+  const sections = CHANGE_GROUPS.filter((g) => groups.get(g.key).length > 0).map(
+    (g) => `### ${g.title}\n${groups.get(g.key).map((item) => `• ${item}`).join('\n')}`
+  );
+  return [tidy(intro.join('\n')), ...sections].filter(Boolean).join('\n\n');
+}
+
 /** Turns "- item" lines into bullets and bolds percentages and the promo code. */
-export function formatBody(body, { bullets, vibe, promoCode }) {
+export function formatBody(body, { bullets, vibe, promoCode, changelog = false }) {
   let n = 0;
-  let out = tidy(body)
+  let out = (changelog ? groupChangelog(body) : tidy(body))
     .split('\n')
     .map((line) => {
       if (!BULLET_MARKER.test(line)) {
@@ -129,7 +216,7 @@ function urgencyTag(endsAt, now = Date.now()) {
   return null;
 }
 
-const SIGNOFF_PICK = () => PROMO_SIGNOFFS[Math.floor(Math.random() * PROMO_SIGNOFFS.length)];
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 const text = (content) => new TextDisplayBuilder().setContent(content);
 const divider = () => new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large);
@@ -170,7 +257,8 @@ export async function buildAnnouncement({
     );
   }
 
-  const store = styleKey === 'promo' ? await getStoreConfig(guild.id) : null;
+  const isSale = Boolean(style.sale);
+  const store = isSale ? await getStoreConfig(guild.id) : null;
   const promoLive = Boolean(store && promoIsActive(store));
   const hype = vibe === 'hype';
 
@@ -194,6 +282,7 @@ export async function buildAnnouncement({
         bullets: style.bullets,
         vibe,
         promoCode: promoLive ? store.promoCode : null,
+        changelog: Boolean(style.changelog),
       }).slice(0, MAX_BODY_CHARS)
     )
   );
@@ -208,7 +297,7 @@ export async function buildAnnouncement({
   let linkLabel = buttonLabel;
   let linkUrl = buttonUrl;
 
-  if (styleKey === 'promo') {
+  if (isSale) {
     if (promoLive) {
       const lines = [`## ${store.promoPercent}% OFF`, `🎟️ Use code **\`${store.promoCode}\`** at checkout`];
       if (store.promoEndsAt) {
@@ -242,7 +331,8 @@ export async function buildAnnouncement({
     container.addActionRowComponents(new ActionRowBuilder().addComponents(...buttons.slice(0, 5)));
   }
 
-  const signOff = tidy(closing) || (promoLive && hype ? SIGNOFF_PICK() : '');
+  const styleSignoffs = isSale ? (promoLive ? style.signoffs || PROMO_SIGNOFFS : null) : style.signoffs;
+  const signOff = tidy(closing) || (hype && styleSignoffs ? pick(styleSignoffs) : '');
   if (signOff) container.addTextDisplayComponents(text(`*${signOff.slice(0, 200)}*`));
 
   container.addTextDisplayComponents(text(`-# Posted by ${author} • <t:${Math.floor(Date.now() / 1000)}:f>`));

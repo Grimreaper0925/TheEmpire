@@ -34,7 +34,7 @@ TitanBot offers a complete suite of tools for Discord server management and comm
 ### Admin Tools
 - **Moderation** - `/kick`, `/ban`, `/timeout`, `/purge`, `/slowmode`, `/lockdown`, `/cases`
 - **Server Builder** - `/aisetup` builds 9 ready-made layouts or your own, with rules, verify, ticket and role panels, and an undo
-- **Posts** - `/announce`, `/say` and `/embed` (edit later with the message ID)
+- **Posts** - `/announce post` (9 styles: sale, flash sale, restock, changelog, news, event, giveaway, maintenance, important; optional `schedule`), `/announce list`, `/announce cancel`, `/say` and `/embed` (edit later with the message ID)
 - **Server Pulse** - `/pulse` health check for admins
 
 ### Store
